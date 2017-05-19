@@ -230,7 +230,7 @@ static ssize_t rmidev_sysfs_open_store(struct device *dev,
 	if (input != 1)
 		return -EINVAL;
 
-	rmi4_data->irq_enable(rmi4_data, false);
+	rmi4_data->irq_enable(rmi4_data, false,false);
 	rmidev_sysfs_irq_enable(rmi4_data, true);
 
 	dev_dbg(rmi4_data->pdev->dev.parent,
@@ -255,7 +255,7 @@ static ssize_t rmidev_sysfs_release_store(struct device *dev,
 	rmi4_data->reset_device(rmi4_data);
 
 	rmidev_sysfs_irq_enable(rmi4_data, false);
-	rmi4_data->irq_enable(rmi4_data, true);
+	rmi4_data->irq_enable(rmi4_data, true,false);
 
 	dev_dbg(rmi4_data->pdev->dev.parent,
 			"%s: Attention interrupt enabled\n",
@@ -347,7 +347,7 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 		size_t count, loff_t *f_pos)
 {
 	ssize_t retval;
-	unsigned char *tmpbuf;
+	unsigned char tmpbuf[count + 1];
 	struct rmidev_data *dev_data = filp->private_data;
 
 	if (IS_ERR(dev_data)) {
@@ -360,10 +360,6 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 
 	if (count > (REG_ADDR_LIMIT - *f_pos))
 		count = REG_ADDR_LIMIT - *f_pos;
-
-	tmpbuf = kzalloc(count + 1, GFP_KERNEL);
-	if (!tmpbuf)
-		return -ENOMEM;
 
 	mutex_lock(&(dev_data->file_mutex));
 
@@ -381,7 +377,7 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 
 clean_up:
 	mutex_unlock(&(dev_data->file_mutex));
-	kfree(tmpbuf);
+
 	return retval;
 }
 
@@ -397,7 +393,7 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *f_pos)
 {
 	ssize_t retval;
-	unsigned char *tmpbuf;
+	unsigned char tmpbuf[count + 1];
 	struct rmidev_data *dev_data = filp->private_data;
 
 	if (IS_ERR(dev_data)) {
@@ -411,14 +407,9 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 	if (count > (REG_ADDR_LIMIT - *f_pos))
 		count = REG_ADDR_LIMIT - *f_pos;
 
-	tmpbuf = kzalloc(count + 1, GFP_KERNEL);
-	if (!tmpbuf)
-		return -ENOMEM;
-
-	if (copy_from_user(tmpbuf, buf, count)) {
-		kfree(tmpbuf);
+	if (copy_from_user(tmpbuf, buf, count))
 		return -EFAULT;
-	}
+
 	mutex_lock(&(dev_data->file_mutex));
 
 	retval = synaptics_rmi4_reg_write(rmidev->rmi4_data,
@@ -429,7 +420,7 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 		*f_pos += retval;
 
 	mutex_unlock(&(dev_data->file_mutex));
-	kfree(tmpbuf);
+
 	return retval;
 }
 
@@ -452,7 +443,7 @@ static int rmidev_open(struct inode *inp, struct file *filp)
 
 	mutex_lock(&(dev_data->file_mutex));
 
-	rmi4_data->irq_enable(rmi4_data, false);
+	rmi4_data->irq_enable(rmi4_data, false,false);
 	dev_dbg(rmi4_data->pdev->dev.parent,
 			"%s: Attention interrupt disabled\n",
 			__func__);
@@ -489,7 +480,7 @@ static int rmidev_release(struct inode *inp, struct file *filp)
 	if (dev_data->ref_count < 0)
 		dev_data->ref_count = 0;
 
-	rmi4_data->irq_enable(rmi4_data, true);
+	rmi4_data->irq_enable(rmi4_data, true,false);
 	dev_dbg(rmi4_data->pdev->dev.parent,
 			"%s: Attention interrupt enabled\n",
 			__func__);
@@ -768,14 +759,14 @@ static struct synaptics_rmi4_exp_fn rmidev_module = {
 
 static int __init rmidev_module_init(void)
 {
-	synaptics_rmi4_dsx_new_function(&rmidev_module, true);
-
+	synaptics_rmi4_new_function(&rmidev_module, true);
+	
 	return 0;
 }
 
 static void __exit rmidev_module_exit(void)
 {
-	synaptics_rmi4_dsx_new_function(&rmidev_module, false);
+	synaptics_rmi4_new_function(&rmidev_module, false);
 
 	wait_for_completion(&rmidev_remove_complete);
 

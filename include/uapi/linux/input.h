@@ -744,6 +744,17 @@ struct input_keymap_entry {
 #define KEY_BRIGHTNESS_MIN		0x250	/* Set Brightness to Minimum */
 #define KEY_BRIGHTNESS_MAX		0x251	/* Set Brightness to Maximum */
 
+/********zhangzhao********/
+#define KEY_GESTURE_CLICK	0x260
+#define KEY_GESTURE_C		0x261	/* AC Properties */
+#define KEY_GESTURE_E		0x262	/* AC Undo */
+#define KEY_GESTURE_M		0x263
+#define KEY_GESTURE_O		0x264	/* AC Open */
+#define KEY_GESTURE_S		0x265	/* AC Copy */
+#define KEY_GESTURE_W		0x266	/* AC Open */
+#define KEY_HALL_SENSOR_OPEN    0x267
+#define KEY_HALL_SENSOR_CLOSE   0x268
+
 #define BTN_TRIGGER_HAPPY		0x2c0
 #define BTN_TRIGGER_HAPPY1		0x2c0
 #define BTN_TRIGGER_HAPPY2		0x2c1
