@@ -1,0 +1,54 @@
+/* Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 and
+* only version 2 as published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*/
+
+/dts-v1/;
+
+#include "p839f30/p839f30-msm8939.dtsi"
+#include "p839f30/p839f30-msm8939-mtp.dtsi"
+#include "p839f30/p839f30-msm8939-audio-internal_codec.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. MSM 8939 MTP";
+	compatible = "qcom,msm8939-mtp", "qcom,msm8939", "qcom,mtp";
+	qcom,board-id = <8 1>;
+};
+
+&cci {
+	//flash:
+	//LM3642:HW connect:GPIO 32--STROBE
+	//                  GPIO 86--TX
+	//actually,the 2 pins are not necessary.
+	flash_lm3642:qcom,led-flash@63 {
+		reg = <0x63>;
+		cell-index = <0>;
+		qcom,slave-id = <0xC6 0x00 0x0011>;
+		compatible = "qcom-flash,lm3642";
+		label = "lm3642";
+		qcom,flash-type = <1>;
+        /*yuxin del LM3642 GPIO 2014.11.13 ++
+		qcom,gpio-no-mux = <0>;
+		gpios = <&msm_gpio 32 0>,
+			<&msm_gpio 86 0>;
+		qcom,gpio-flash-en = <0>;
+		qcom,gpio-flash-now = <1>;
+		qcom,gpio-req-tbl-num = <0 1>;
+		qcom,gpio-req-tbl-flags = <0 0>;
+		qcom,gpio-req-tbl-label = "FLASH_EN",
+			"FLASH_NOW";
+	yuxin del LM3642 GPIO 2014.11.13--*/
+		qcom,cci-master = <0>;
+	};
+
+	qcom,camera@0 {
+		qcom,led-flash-src = <&flash_lm3642>;
+	};
+};

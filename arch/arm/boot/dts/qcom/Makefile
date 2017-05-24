@@ -84,6 +84,8 @@ else ifeq ($(CONFIG_PAELLA_COMMON),y)
 dtb-$(CONFIG_ARCH_MSM8916) +=  paella-msm8916-qrd-skui.dtb
 else ifeq ($(CONFIG_VEGETALTE_COMMON),y)
 dtb-$(CONFIG_ARCH_MSM8916) +=  vegetalte-msm8916-qrd-skui.dtb
+else ifeq ($(CONFIG_P839F30_COMMON),y)
+dtb-$(CONFIG_ARCH_MSM8916) +=  p839f30-msm8939-mtp.dtb
 else
 dtb-$(CONFIG_ARCH_MSM8916) += msm8916-cdp.dtb \
 	msm8916-cdp-smb1360.dtb \
