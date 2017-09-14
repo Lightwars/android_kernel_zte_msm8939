@@ -1994,7 +1994,39 @@ static int msm8x16_wcd_ear_pa_boost_set(struct snd_kcontrol *kcontrol,
 		(ucontrol->value.integer.value[0] ? true : false);
 	return 0;
 }
+#ifdef   CONFIG_ZTE_HEADSET_GPIO
+static int msm8x16_wcd_zte_hph_switch_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct msm8x16_wcd_priv *msm8x16_wcd = snd_soc_codec_get_drvdata(codec);
 
+	ucontrol->value.integer.value[0] =
+		(msm8x16_wcd->zte_hph_switch_set ? 1 : 0);
+	dev_dbg(codec->dev, "%s: msm8x16_wcd->zte_hph_switch_set = %d\n",
+			__func__, msm8x16_wcd->zte_hph_switch_set);
+	return 0;
+}
+
+
+static int msm8x16_wcd_zte_hph_switch_set(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct msm8x16_wcd_priv *msm8x16_wcd = snd_soc_codec_get_drvdata(codec);
+	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
+		__func__, ucontrol->value.integer.value[0]);
+	msm8x16_wcd->zte_hph_switch_set =
+		(ucontrol->value.integer.value[0] ? true : false);
+       if(msm8x16_wcd->mbhc.hph_switch > 0)
+       {
+		gpio_direction_output(msm8x16_wcd->mbhc.hph_switch, msm8x16_wcd->zte_hph_switch_set);
+	dev_dbg(codec->dev, "%s: set the msm8x16_wcd->zte_hph_switch_set  to %d\n",
+			__func__,msm8x16_wcd->zte_hph_switch_set);		
+	 }
+	return 0;
+}
+#endif
 static int msm8x16_wcd_pa_gain_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
@@ -2461,7 +2493,13 @@ static const char * const msm8x16_wcd_ear_pa_boost_ctrl_text[] = {
 static const struct soc_enum msm8x16_wcd_ear_pa_boost_ctl_enum[] = {
 		SOC_ENUM_SINGLE_EXT(2, msm8x16_wcd_ear_pa_boost_ctrl_text),
 };
-
+#ifdef   CONFIG_ZTE_HEADSET_GPIO
+static const char * const msm8x16_wcd_zte_hph_switch_ctrl_text[] = {
+		"PMIC", "HIFI"};
+static const struct soc_enum msm8x16_wcd_zte_hph_switch_ctl_enum[] = {
+		SOC_ENUM_SINGLE_EXT(2, msm8x16_wcd_zte_hph_switch_ctrl_text),
+};
+#endif
 static const char * const msm8x16_wcd_ear_pa_gain_text[] = {
 		"POS_1P5_DB", "POS_6_DB"};
 static const struct soc_enum msm8x16_wcd_ear_pa_gain_enum[] = {
@@ -2524,7 +2562,10 @@ static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 
 	SOC_ENUM_EXT("EAR PA Gain", msm8x16_wcd_ear_pa_gain_enum[0],
 		msm8x16_wcd_pa_gain_get, msm8x16_wcd_pa_gain_put),
-
+#ifdef   CONFIG_ZTE_HEADSET_GPIO
+	SOC_ENUM_EXT("ZTE HPH Switch", msm8x16_wcd_zte_hph_switch_ctl_enum[0],
+		msm8x16_wcd_zte_hph_switch_get, msm8x16_wcd_zte_hph_switch_set),
+#endif
 	SOC_ENUM_EXT("Speaker Boost", msm8x16_wcd_spk_boost_ctl_enum[0],
 		msm8x16_wcd_spk_boost_get, msm8x16_wcd_spk_boost_set),
 #if defined(CONFIG_SPEAKER_EXT_PA)
@@ -2577,6 +2618,9 @@ static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 	SOC_SINGLE_SX_TLV("IIR2 INP1 Volume",
 			  MSM8X16_WCD_A_CDC_IIR2_GAIN_B1_CTL,
 			0,  -84, 40, digital_gain),
+
+	SOC_SINGLE("MICBIAS CAPLESS Switch",
+		   MSM8X16_WCD_A_ANALOG_MICB_1_EN, 6, 1, 0),
 
 	SOC_ENUM("TX1 HPF cut off", cf_dec1_enum),
 	SOC_ENUM("TX2 HPF cut off", cf_dec2_enum),

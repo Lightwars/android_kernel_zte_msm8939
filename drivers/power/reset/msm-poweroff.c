@@ -212,6 +212,10 @@ static void halt_spmi_pmic_arbiter(void)
 	}
 }
 
+
+int zte_dump_switch =0;
+
+
 static void msm_restart_prepare(const char *cmd)
 {
 	bool need_warm_reset = false;
@@ -235,7 +239,8 @@ static void msm_restart_prepare(const char *cmd)
 			((cmd != NULL && cmd[0] != '\0') &&
 			strcmp(cmd, "recovery") &&
 			strcmp(cmd, "bootloader") &&
-			strcmp(cmd, "rtc")))
+			strcmp(cmd, "rtc") &&
+			strcmp(cmd, "ftmmode")))
 			need_warm_reset = true;
 	} else {
 		need_warm_reset = (get_dload_mode() ||
@@ -283,6 +288,10 @@ static void msm_restart_prepare(const char *cmd)
 					     restart_reason);
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
+		} else if(!strncmp(cmd, "ftmmode", 7)) { 
+		    qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_FTMMODE);
+			__raw_writel(0x77665504, restart_reason);
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
@@ -421,6 +430,10 @@ static int msm_restart_probe(struct platform_device *pdev)
 		if (!emergency_dload_mode_addr)
 			pr_err("unable to map imem EDLOAD mode offset\n");
 	}
+	
+
+       if(zte_dump_switch)
+	set_dload_mode(download_mode);
 
 #endif
 	np = of_find_compatible_node(NULL, NULL,
@@ -485,3 +498,19 @@ static int __init msm_restart_init(void)
 	return platform_driver_register(&msm_restart_driver);
 }
 device_initcall(msm_restart_init);
+
+
+static int __init dump_switch_setup(char *str) 
+{
+	if(get_option(&str, &zte_dump_switch))
+	    {
+	    printk("zte_dump_switch = %d\n", zte_dump_switch);
+	    return 0;
+	  }
+	else
+	    {
+	    printk("zte_dump_switch get failed \n");
+	    return -EINVAL;
+	  }
+}
+early_param("zte_dump_switch", dump_switch_setup);

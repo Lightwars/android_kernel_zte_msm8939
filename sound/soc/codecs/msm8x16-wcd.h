@@ -299,6 +299,9 @@ struct msm8x16_wcd_priv {
 	bool spk_boost_set;
 	bool ear_pa_boost_set;
 	bool ext_spk_boost_set;
+#ifdef   CONFIG_ZTE_HEADSET_GPIO
+	bool zte_hph_switch_set;
+#endif
 	bool dec_active[NUM_DECIMATORS];
 	struct on_demand_supply on_demand_list[ON_DEMAND_SUPPLIES_MAX];
 	struct regulator *spkdrv_reg;

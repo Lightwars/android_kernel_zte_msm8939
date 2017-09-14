@@ -32,7 +32,14 @@ config SND_SOC_DMAENGINE_PCM
 config SND_SOC_GENERIC_DMAENGINE_PCM
 	bool
 	select SND_SOC_DMAENGINE_PCM
-
+	
+#weiguohua add it for zte headset gpio detect requirement,20141030	
+config ZTE_HEADSET_GPIO
+    bool "zte add zte headset gpio detect"
+	
+config ZTE_OPEN_QCOM_I2S_QUARD
+   bool  "zte add QCOM_I2S_QUARD"
+	
 # All the supported SoCs
 source "sound/soc/atmel/Kconfig"
 source "sound/soc/au1x/Kconfig"

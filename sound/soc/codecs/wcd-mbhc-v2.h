@@ -368,6 +368,13 @@ struct wcd_mbhc {
 	u8 hphlocp_cnt; /* headphone left ocp retry */
 	u8 hphrocp_cnt; /* headphone right ocp retry */
 
+#ifdef   CONFIG_ZTE_HEADSET_GPIO
+	unsigned int gpio;
+	unsigned int gpio_irq;
+	int gpio_level_insert;
+	unsigned int hph_switch;
+#endif
+	
 	wait_queue_head_t wait_btn_press;
 	bool is_btn_press;
 	u8 current_plug;
@@ -417,6 +424,10 @@ struct wcd_mbhc {
 
 	/* Work to correct accessory type */
 	struct work_struct correct_plug_swch;
+#ifdef   CONFIG_ZTE_HEADSET_GPIO
+	struct mutex headset_gpio_detect_mutex;
+	struct delayed_work headset_gpio_detect_work;
+#endif
 	struct notifier_block nblock;
 
 	struct wcd_mbhc_register *wcd_mbhc_regs;
