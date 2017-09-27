@@ -960,7 +960,7 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 			goto end;
 	}
 
-	//zhangjian modify
+  //zhangjian modify
   #ifdef CONFIG_TP_WAKEUP_GESTURE
   pr_err(LCD_DEVICE"%s: off_cmds incell\n",__func__);//add by yangchaofeng for debug lcd
   if (lcd_get_tsc_gesture_state())
@@ -985,6 +985,7 @@ end:
 	pr_debug("%s:-\n", __func__);
 	return 0;
 }
+
 //zhangjian add for ce
 #ifdef CONFIG_LCD_DISPLAY_ENHANCE
 int  panel_set_enhance(struct mdss_panel_data *pdata, int ce_mode)
@@ -1038,7 +1039,6 @@ int  panel_set_CEenhance(int ce_mode)
 }
 #endif
 //zhangjian add end
-
 
 static int mdss_dsi_panel_low_power_config(struct mdss_panel_data *pdata,
 	int enable)
@@ -2256,7 +2256,7 @@ int mdss_dsi_panel_init(struct device_node *node,
 		pr_err("%s: Invalid arguments\n", __func__);
 		return -ENODEV;
 	}
-
+    g_ctrl_pdata = ctrl_pdata;//zhangjian add for TP check
 	pinfo = &ctrl_pdata->panel_data.panel_info;
 
 	pr_debug("%s:%d\n", __func__, __LINE__);
@@ -2268,6 +2268,8 @@ int mdss_dsi_panel_init(struct device_node *node,
 	} else {
 		pr_info("%s: Panel Name = %s\n", __func__, panel_name);
 		strlcpy(&pinfo->panel_name[0], panel_name, MDSS_MAX_PANEL_LEN);
+		
+    strlcpy(LcdPanelName, panel_name, MDSS_MAX_PANEL_LEN);//zhangjian add adb read lcd info
 	}
 	#ifdef LCM_SUPPORT_READ_VERSION
 		rc = mdss_panel_parse_panel_name(node);

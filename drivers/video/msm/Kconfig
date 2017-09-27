@@ -1,6 +1,18 @@
 
 source "drivers/video/msm/vidc/Kconfig"
 
+config ZTE_LCD_P8939
+	bool	"Support for LCD power control"
+	default n
+config ZTE_NOT_INCELL_LCD
+	bool	"Support for LCD not incell"
+	default n
+config TP_WAKEUP_GESTURE
+	bool	"Support for wakeup gasture"
+	default n
+config LCD_DISPLAY_ENHANCE
+	bool	"Support for LCD EC "
+	default n	
 config FB_MSM
 	tristate "MSM Framebuffer support"
 	depends on FB && ARCH_MSM
