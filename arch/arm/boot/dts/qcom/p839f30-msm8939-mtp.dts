@@ -12,9 +12,9 @@
 
 /dts-v1/;
 
-#include "p839f30/p839f30-msm8939.dtsi"
-#include "p839f30/p839f30-msm8939-mtp.dtsi"
-#include "p839f30/p839f30-msm8939-audio-internal_codec.dtsi"
+#include "p839f30/msm8939.dtsi"
+#include "p839f30/msm8939-mtp.dtsi"
+#include "p839f30/msm8939-audio-internal_codec.dtsi"
 
 / {
 	model = "Qualcomm Technologies, Inc. MSM 8939 MTP";
@@ -49,6 +49,6 @@
 	};
 
 	qcom,camera@0 {
-		qcom,led-flash-src = <&flash_lm3642>;
+		qcom,led-flash-src = <&flash_lm3642>;  //P839F30 use LM3642 flash
 	};
 };

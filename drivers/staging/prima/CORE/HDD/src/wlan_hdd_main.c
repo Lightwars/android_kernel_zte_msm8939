@@ -10839,11 +10839,11 @@ free_hdd_ctx:
 }
 
 /*modify for wifi mac*/
-#ifdef    CONFIG_VEGETALTE_COMMON
+#ifdef    CONFIG_P839F30_COMMON
 static VOS_STATUS hdd_update_wifi_mac(hdd_context_t* pHddCtx)
 {
 	struct file *fp      = NULL;
-	char* filepath       = "/persist/softmac";
+	char* filepath       = "/persist/wifimac.dat";
 	char macbuf[20]      ={0};
 	int ret              = 0;
 	mm_segment_t oldfs   = {0};
@@ -12188,7 +12188,7 @@ int hdd_wlan_startup(struct device *dev )
                 "using MAC from ini file ", __func__);
       }
    }
-#ifdef    CONFIG_VEGETALTE_COMMON
+#ifdef    CONFIG_P839F30_COMMON
    else if (
         (VOS_STATUS_SUCCESS != hdd_update_config_from_nv(pHddCtx)) &&
         (VOS_STATUS_SUCCESS != hdd_update_wifi_mac(pHddCtx))
