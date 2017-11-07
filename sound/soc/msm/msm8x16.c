@@ -1999,7 +1999,7 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	 * all btn_low corresponds to threshold for current source
 	 * all bt_high corresponds to threshold for Micbias
 	 */
-#ifdef CONFIG_VEGETALTE_COMMON 
+/*#ifdef CONFIG_VEGETALTE_COMMON 
 	btn_low[0] = 75;	// BTN_0
 	btn_high[0] = 75;
 	btn_low[1] = 100;	// BTN_1	
@@ -2023,18 +2023,18 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	btn_low[4] = 500; //475;	// BTN_4	
 	btn_high[4] = 500; //475;
 #else
-#if  defined(CONFIG_P839F30_COMMON)
-	btn_low[0] = 78;
-	btn_high[0] = 95.5;
-	btn_low[1] = 266;
-	btn_high[1] = 328.5;
-	btn_low[2] = 486;
-	btn_high[2] = 603.5;
-	btn_low[3] = 623;
-	btn_high[3] = 643;
-	btn_low[4] = 663;
-	btn_high[4] = 683;
-#else
+#if  defined(CONFIG_P839F30_COMMON)*/
+	btn_low[0] = 25;
+	btn_high[0] = 25;
+	btn_low[1] = 50;
+	btn_high[1] = 50;
+	btn_low[2] = 75;
+	btn_high[2] = 75;
+	btn_low[3] = 112;
+	btn_high[3] = 112;
+	btn_low[4] = 137;
+	btn_high[4] = 137;
+/*#else
 	btn_low[0] = 25;
 	btn_high[0] = 25;
 	btn_low[1] = 50;
@@ -2047,7 +2047,7 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	btn_high[4] = 137;
 #endif
 #endif
-#endif
+#endif*/
 	return msm8x16_wcd_cal;
 }
 
