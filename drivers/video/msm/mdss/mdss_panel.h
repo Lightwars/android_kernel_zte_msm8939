@@ -24,7 +24,14 @@ struct panel_id {
 	u16 id;
 	u16 type;
 };
-
+/* zhangjian add for adb read LCD info */
+#define PANEL_NAME_MAX_LEN 50
+#define TD4291_JDI_720P_VIDEO_PANEL         "td4291 jdi 720p video mode dsi panel"
+#define ILI9806E_HOLITECH_WVGA_PANEL       "ili9806e wvga video mode dsi panel"
+#define JDF_OTM1284A_720P_VIDEO_PANEL      "jdf otm1284a 720p video"    //add by yangchaofeng F30-LCD
+#define LEAD_OTM1284A_720P_VIDEO_PANEL     "lead otm1284a 720p video"   //add by yangchaofeng F30-LCD
+/* add end */
+#define LCD_DEVICE "[MSM_LCD]"   //add by yangchaofeng for debug lcd
 #define DEFAULT_FRAME_RATE	60
 #define DEFAULT_ROTATOR_FRAME_RATE 120
 #define MDSS_DSI_RST_SEQ_LEN	10
@@ -44,7 +51,15 @@ struct panel_id {
 #define WRITEBACK_PANEL		10	/* Wifi display */
 #define LVDS_PANEL		11	/* LVDS */
 #define EDP_PANEL		12	/* LVDS */
-
+//zhangjian add for ce enhance
+#ifdef CONFIG_LCD_DISPLAY_ENHANCE
+enum{
+	CE_DEFAULT,
+	CE_BRIGHT,	
+	LCD_CE_MAX,
+};
+#endif
+//zhangjian add end
 static inline const char *mdss_panel2str(u32 panel)
 {
 	static const char const *names[] = {
