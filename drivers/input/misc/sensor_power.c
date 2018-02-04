@@ -202,6 +202,6 @@ static struct platform_driver sensor_power_ctrl = {
 module_platform_driver(sensor_power_ctrl);
 
 MODULE_DESCRIPTION("sensor power driver");
-MODULE_AUTHOR("Haifei Wang <wang.haifei@zfg.com.cn>");
+MODULE_AUTHOR("Haifei Wang <wang.haifei@zte.com.cn>");
 MODULE_LICENSE("GPL");
 

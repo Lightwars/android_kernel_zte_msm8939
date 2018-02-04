@@ -69,3 +69,6 @@ obj-$(CONFIG_QCOM_LIQUID_DOCK)	+= qcom_liquid_dock.o
 obj-y				+= qcom/
 obj-$(CONFIG_UID_CPUTIME) 	+= uid_cputime.o
 obj-$(CONFIG_TPS65132_LCM_VSP)  += tps65132.o
+#[ECID:000000] ZTE_MODIFY, read hardware board id,start
+obj-y	  += zte_hw_board.o
+#[ECID:000000] ZTE_MODIFY, read hardware board id,start
