@@ -1,6 +1,6 @@
 /*!
  * @section LICENSE
- * (C) Copyright 2013 Bosch Sensortec GmbH All Rights Reserved
+ * (C) Copyright 2011~2014 Bosch Sensortec GmbH All Rights Reserved
  *
  * This software program is licensed subject to the GNU General
  * Public License (GPL).Version 2,June 1991,
@@ -80,7 +80,7 @@ static struct device_type bst_dev_type = {
 
 
 
-static char *bst_devnode(struct device *dev, umode_t *mode)
+static char *bst_devnode(struct device *dev, mode_t *mode)
 {
 	return kasprintf(GFP_KERNEL, "%s", dev_name(dev));
 }
@@ -158,8 +158,7 @@ int bst_register_device(struct bst_dev *dev)
 {
 	const char *path;
 	int error;
-
-
+	
 	/*
 	 * If delay and period are pre-set by the driver, then autorepeating
 	 * is handled by the driver itself and we don't do it in input.c.
@@ -171,7 +170,7 @@ int bst_register_device(struct bst_dev *dev)
 		return error;
 
 	path = kobject_get_path(&dev->dev.kobj, GFP_KERNEL);
-	dev_dbg(&dev->dev, "%s as %s\n",
+	printk(KERN_INFO "%s as %s\n",
 			dev->name ? dev->name : "Unspecified device",
 			path ? path : "N/A");
 	kfree(path);
@@ -197,49 +196,14 @@ EXPORT_SYMBOL(bst_register_device);
  */
 void bst_unregister_device(struct bst_dev *dev)
 {
-	int error;
-
-	error = mutex_lock_interruptible(&bst_mutex);
+	int ret = 0;
+	
+	ret = mutex_lock_interruptible(&bst_mutex);
 	list_del_init(&dev->node);
-	if (!error)
-		mutex_unlock(&bst_mutex);
+	mutex_unlock(&bst_mutex);
 	device_unregister(&dev->dev);
 }
 EXPORT_SYMBOL(bst_unregister_device);
-
-static int bst_open_file(struct inode *inode, struct file *file)
-{
-	const struct file_operations *old_fops, *new_fops = NULL;
-	int err;
-
-	/*
-	 * That's _really_ odd. Usually NULL ->open means "nothing special",
-	 * not "no device". Oh, well...
-	 */
-	if (!new_fops || !new_fops->open) {
-		fops_put(new_fops);
-		err = -ENODEV;
-		goto out;
-	}
-
-	old_fops = file->f_op;
-	file->f_op = new_fops;
-
-	err = new_fops->open(inode, file);
-	if (err) {
-		fops_put(file->f_op);
-		file->f_op = fops_get(old_fops);
-	}
-	fops_put(old_fops);
-out:
-	return err;
-}
-
-static const struct file_operations bst_fops = {
-	.owner = THIS_MODULE,
-	.open = bst_open_file,
-	/*.llseek = noop_llseek,*/
-};
 
 static int __init bst_init(void)
 {
@@ -263,7 +227,8 @@ static void __exit bst_exit(void)
 
 MODULE_AUTHOR("contact@bosch-sensortec.com");
 MODULE_DESCRIPTION("BST CLASS CORE");
-MODULE_LICENSE("GPL V2");
+MODULE_LICENSE("GPL v2");
+
 
 module_init(bst_init);
 module_exit(bst_exit);

@@ -51,6 +51,8 @@
 #define WCNSS_PINCTRL_STATE_DEFAULT "wcnss_default"
 #define WCNSS_PINCTRL_STATE_SLEEP "wcnss_sleep"
 #define WCNSS_PINCTRL_GPIO_STATE_DEFAULT "wcnss_gpio_default"
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
 #define WCNSS_DISABLE_PC_LATENCY	100
 #define WCNSS_ENABLE_PC_LATENCY	PM_QOS_DEFAULT_VALUE
@@ -3371,6 +3373,82 @@ static struct of_device_id msm_wcnss_pronto_match[] = {
 };
 #endif
 
+
+static char wlan_info[51] = "Device manufacturing:SAMSUNG Model Number:WCN3680B";
+static int wlan_info_read_proc(struct seq_file *m, void *v)
+{
+	//int len = strlen(wlan_info);
+	//return sprintf(page, "%s\n", wlan_info);
+	//return len + 1;
+	return seq_printf(m, "%s\n", wlan_info);
+}
+
+static char bt_id[55] = "BT_Info = BT Information:SAMSUNG Model Number:WCN3680B";
+static int bt_id_read_proc(struct seq_file *m, void *v)
+{
+	//int len = strlen(bt_id);
+	//return sprintf(page, "%s\n", bt_id);
+	//return len + 1;
+	return seq_printf(m, "%s\n", bt_id);
+}
+/*
+ * seq_file wrappers for procfile show routines.
+ */
+static int wlan_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, wlan_info_read_proc, NULL);
+}
+static int bt_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, bt_id_read_proc, NULL);
+}
+static const struct file_operations wlan_proc_fops = {
+	.open		= wlan_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static const struct file_operations bt_proc_fops = {
+	.open		= bt_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+static struct proc_dir_entry *wlan_info_proc_file;
+static struct proc_dir_entry *bt_id_proc_file;
+static void create_wlan_info_proc_file(void)
+{
+  wlan_info_proc_file = proc_create("driver/wlan_info", 0777, NULL,&wlan_proc_fops);
+  printk("goes to create_wlan_info_proc_file\n");
+  if (wlan_info_proc_file) {
+			//wlan_info_proc_file->read_proc = wlan_info_read_proc;
+   } else
+	printk(KERN_INFO "proc file create failed!\n");
+
+  bt_id_proc_file = proc_create("driver/bt_id", 0777, NULL,&bt_proc_fops);
+ // printk("goes to create_wlan_info_proc_file\n");
+  if (bt_id_proc_file) {
+			//bt_id_proc_file->read_proc = bt_id_read_proc;
+   } else
+	printk(KERN_INFO "proc file create failed!\n");
+}
+
+static void remove_wlan_info_proc_file(void)
+{
+	printk("goes to remove_wlan_info_proc_file\n");
+	if(wlan_info_proc_file){
+		remove_proc_entry("driver/wlan_info", NULL);
+		wlan_info_proc_file = NULL;
+	}
+	if(bt_id_proc_file){
+		remove_proc_entry("driver/bt_id", NULL);
+		bt_id_proc_file = NULL;
+	}	
+}
+
+
+
 static struct platform_driver wcnss_wlan_driver = {
 	.driver = {
 		.name	= DEVICE,
@@ -3390,6 +3468,7 @@ static int __init wcnss_wlan_init(void)
 	platform_driver_register(&wcnss_wlan_ctrl_driver);
 	platform_driver_register(&wcnss_ctrl_driver);
 	register_pm_notifier(&wcnss_pm_notifier);
+    create_wlan_info_proc_file();
 
 	return 0;
 }
@@ -3406,6 +3485,9 @@ static void __exit wcnss_wlan_exit(void)
 	platform_driver_unregister(&wcnss_ctrl_driver);
 	platform_driver_unregister(&wcnss_wlan_ctrl_driver);
 	platform_driver_unregister(&wcnss_wlan_driver);
+	 
+    remove_wlan_info_proc_file();
+	
 }
 
 module_init(wcnss_wlan_init);

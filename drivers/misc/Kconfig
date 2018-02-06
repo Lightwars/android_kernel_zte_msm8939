@@ -644,4 +644,7 @@ source "drivers/misc/altera-stapl/Kconfig"
 source "drivers/misc/mei/Kconfig"
 source "drivers/misc/vmw_vmci/Kconfig"
 source "drivers/misc/qcom/Kconfig"
+#[ECID:000000] ZTEBSP wanghaifei start 20120330, add sensor support
+source "drivers/misc/zte-sensor/Kconfig"
+#[ECID:000000] ZTEBSP wanghaifei end 20120330, add sensor support
 endmenu
