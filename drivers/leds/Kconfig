@@ -40,21 +40,6 @@ config LEDS_ATMEL_PWM
 	  This option enables support for LEDs driven using outputs
 	  of the dedicated PWM controller found on newer Atmel SOCs.
 
-config LEDS_AW2013
-	tristate "LED support for the AW2013"
-	depends on LEDS_CLASS
-	depends on I2C
-	help
-	  This option enables support for the AW2013 connected
-	  through I2C
-
-config LED_BRIGHTNESS_SETTING
-        tristate "LED Support for brightness control"
-        default n
-        depends on ARCH_MSM
-        help
-          This option enables support for LEDs controled by modem subsystem.		  
-
 config LEDS_LM3530
 	tristate "LCD Backlight driver for LM3530"
 	depends on LEDS_CLASS
@@ -533,12 +518,20 @@ config LEDS_BLINKM
 	  This option enables support for the BlinkM RGB LED connected
 	  through I2C. Say Y to enable support for the BlinkM LED.
 
-config LEDS_AW2013
-	tristate "LED support for AW2013"
-	depends on LEDS_CLASS && I2C
-	help
-	  This option enables support for the AW2013 RGB LED connected
-	  through I2C. Say Y to enable support for the AW2013 LED.
+# ZTE-MODIFY wanghaifei 20141022 start , add for led control    
+config GPIO_MODEM_LED
+        tristate "LED Support for modem control"
+        default n
+        help
+          This option enables support for LEDs controled by modem subsystem.    
+
+config AW2013_BREATHING_LED
+        tristate "AW2013 Breathing LED Support"
+        default n
+        help
+          This option enables support for AW2013 breathing LED.    
+# ZTE-MODIFY wanghaifei 20141022, end
+
 
 comment "LED Triggers"
 source "drivers/leds/trigger/Kconfig"

@@ -76,6 +76,13 @@
 #include <limFT.h>
 #endif
 
+#ifdef FEATURE_WLAN_ESE
+/* These are the min/max tx power (non virtual rates) range
+   supported by prima hardware */
+#define MIN_TX_PWR_CAP    8
+#define MAX_TX_PWR_CAP    22
+
+#endif
 
 #define JOIN_FAILURE_TIMEOUT   1000   // in msecs
 /* This overhead is time for sending NOA start to host in case of GO/sending NULL data & receiving ACK 

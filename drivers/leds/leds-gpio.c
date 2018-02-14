@@ -22,6 +22,7 @@
 #include <linux/module.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/err.h>
+#include "leds.h"
 
 struct gpio_led_data {
 	struct led_classdev cdev;
@@ -34,6 +35,55 @@ struct gpio_led_data {
 	int (*platform_gpio_blink_set)(unsigned gpio, int state,
 			unsigned long *delay_on, unsigned long *delay_off);
 };
+
+
+
+int msm_gpio_blink_set(unsigned gpio, int state,
+			unsigned long *delay_on, unsigned long *delay_off)
+{
+	return -EPERM;
+}
+
+static unsigned long delay_on = 500;
+static unsigned long delay_off = 500;
+
+static ssize_t blink_store(struct device *dev,
+	struct device_attribute *attr,
+	const char *buf, size_t count)
+{
+	unsigned long blinking;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	ssize_t ret = -EINVAL;
+
+	ret = kstrtoul(buf, 10, &blinking);
+	if (ret)
+		return ret;
+
+	if(blinking)
+		led_blink_set(led_cdev, &delay_on, &delay_off);
+	else
+		led_stop_software_blink(led_cdev);	
+
+	return count;
+}
+
+
+static DEVICE_ATTR(blink, 0664, NULL, blink_store);
+
+static struct attribute *blink_attrs[] = {
+	&dev_attr_blink.attr,
+	NULL
+};
+
+static const struct attribute_group blink_attr_group = {
+	.attrs = blink_attrs,
+};
+
+
+
+
+
+
 
 static void gpio_led_work(struct work_struct *work)
 {
@@ -168,6 +218,7 @@ static struct gpio_leds_priv *gpio_leds_create_of(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node, *child;
 	struct gpio_leds_priv *priv;
+	struct gpio_led_data  *gpio_led_data; 
 	int count, ret;
 
 	/* count LEDs in this device, so we know how much to allocate */
@@ -209,11 +260,19 @@ static struct gpio_leds_priv *gpio_leds_create_of(struct platform_device *pdev)
 				"retain-state-suspended");
 
 		ret = create_gpio_led(&led, &priv->leds[priv->num_leds++],
-				      &pdev->dev, NULL);
+				      &pdev->dev, msm_gpio_blink_set); 
 		if (ret < 0) {
 			of_node_put(child);
 			goto err;
 		}
+
+		
+		gpio_led_data = &priv->leds[priv->num_leds-1];
+		ret = sysfs_create_group(&gpio_led_data->cdev.dev->kobj, &blink_attr_group);
+		if(ret)
+			pr_err("led blink add failed.\n");
+		
+		
 	}
 
 	return priv;
@@ -249,6 +308,7 @@ static int gpio_led_probe(struct platform_device *pdev)
 			"pins are not configured from the driver\n");
 
 	if (pdata && pdata->num_leds) {
+		pr_info("gpio_led_probe 1\n");
 		priv = devm_kzalloc(&pdev->dev,
 				sizeof_gpio_leds_priv(pdata->num_leds),
 					GFP_KERNEL);
@@ -268,6 +328,7 @@ static int gpio_led_probe(struct platform_device *pdev)
 			}
 		}
 	} else {
+		pr_info("gpio_led_probe 2\n");
 		priv = gpio_leds_create_of(pdev);
 		if (IS_ERR(priv))
 			return PTR_ERR(priv);

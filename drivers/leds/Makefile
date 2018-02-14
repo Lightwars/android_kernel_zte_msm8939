@@ -57,10 +57,13 @@ obj-$(CONFIG_LEDS_MAX8997)		+= leds-max8997.o
 obj-$(CONFIG_LEDS_LM355x)		+= leds-lm355x.o
 obj-$(CONFIG_LEDS_BLINKM)		+= leds-blinkm.o
 obj-$(CONFIG_LEDS_MSM_GPIO_FLASH)	+= leds-msm-gpio-flash.o
-obj-$(CONFIG_LEDS_AW2013)		+= leds-aw2013.o
 
-obj-$(CONFIG_LEDS_AW2013)		+= aw2013.o
+# LED SPI Drivers
 obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o
 
 # LED Triggers
 obj-$(CONFIG_LEDS_TRIGGERS)		+= trigger/
+#ZTE-MODIFY wanghaifei add led control 20141022 start
+obj-$(CONFIG_GPIO_MODEM_LED)		+= leds-gpio-modem.o
+obj-$(CONFIG_AW2013_BREATHING_LED)	+= leds-aw2013.o
+#ZTE-MODIFY wanghaifei 20141022 end 
