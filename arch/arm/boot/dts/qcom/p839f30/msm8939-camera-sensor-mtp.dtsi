@@ -15,7 +15,33 @@
 };
 
 &cci {
-	lm3642: flashlight@63 {
+	bd7710: qcom,led-flash@66 {
+		cell-index = <0>;
+		reg = <0x66>;
+		qcom,slave-id = <0x66 0x00 0x0011>;
+		compatible = "qcom,led-flash1";
+		label = "bd7710";
+		qcom,flash-type = <1>;
+		qcom,gpio-no-mux = <0>;
+		qcom,enable_pinctrl;
+		pinctrl-names = "cam_flash_default", "cam_flash_suspend";
+		pinctrl-0 = <&cam_sensor_flash_default>;
+		pinctrl-1 = <&cam_sensor_flash_sleep>;
+		gpios = <&msm_gpio 36 0>,
+			<&msm_gpio 32 0>,
+			<&msm_gpio 31 0>;
+		qcom,gpio-flash-reset = <0>;
+		qcom,gpio-flash-en = <1>;
+		qcom,gpio-flash-now = <2>;
+		qcom,gpio-req-tbl-num = <0 1 2>;
+		qcom,gpio-req-tbl-flags = <0 0 0>;
+		qcom,gpio-req-tbl-label = "FLASH_RST",
+			"FLASH_EN",
+			"FLASH_NOW";
+		qcom,cci-master = <0>;
+	};
+
+	lm3642: qcom,led-flash@63 {
 		cell-index = <0>;
 		reg = <0x63>;
 		compatible = "qcom-flash,lm3642";
@@ -23,7 +49,7 @@
 		qcom,cci-master = <0>;
 		qcom,slave-id = <0xC6 0x00 0x0011>;
 		label = "lm3642";
-		/*qcom,gpio-no-mux = <0>;
+		qcom,gpio-no-mux = <0>;
 		qcom,enable_pinctrl;
 		pinctrl-names = "cam_flash_default", "cam_flash_suspend";
 		pinctrl-0 = <&cam_sensor_flash_default>;
@@ -33,7 +59,7 @@
 		qcom,gpio-req-tbl-num = <0 1>;
 		qcom,gpio-req-tbl-flags = <0 0>;
 		qcom,gpio-req-tbl-label = "FLASH_EN", "FLASH_NOW";
-		qcom,gpio-flash-now = <1>;*/
+		qcom,gpio-flash-now = <1>;
 		linux,name = "flashlight";
 		linux,default-trigger = "flashlight-trigger";
 	};

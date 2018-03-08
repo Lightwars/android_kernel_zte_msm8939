@@ -25,8 +25,8 @@ DEFINE_MSM_MUTEX(msm_eeprom_mutex);
 #ifdef CONFIG_COMPAT
 static struct v4l2_file_operations msm_eeprom_v4l2_subdev_fops;
 #endif
-struct vendor_eeprom s_vendor_eeprom[CAMERA_VENDOR_EEPROM_COUNT_MAX];
 
+extern void msm_sensorinfo_set_back_sensor_module_id(uint8_t module_id, uint8_t eeprom_id);
 /**
   * msm_eeprom_verify_sum - verify crc32 checksum
   * @mem:	data buffer
@@ -137,22 +137,15 @@ static int msm_eeprom_config(struct msm_eeprom_ctrl_t *e_ctrl,
 	struct msm_eeprom_cfg_data *cdata =
 		(struct msm_eeprom_cfg_data *)argp;
 	int rc = 0;
-	size_t length = 0;
 
 	CDBG("%s E\n", __func__);
 	switch (cdata->cfgtype) {
 	case CFG_EEPROM_GET_INFO:
 		CDBG("%s E CFG_EEPROM_GET_INFO\n", __func__);
 		cdata->is_supported = e_ctrl->is_supported;
-		length = strlen(e_ctrl->eboard_info->eeprom_name) + 1;
-		if (length > MAX_EEPROM_NAME) {
-			pr_err("%s:%d invalid eeprom name length %d\n",
-				__func__, __LINE__, (int)length);
-			rc = -EINVAL;
-			break;
-		}
 		memcpy(cdata->cfg.eeprom_name,
-			e_ctrl->eboard_info->eeprom_name, length);
+			e_ctrl->eboard_info->eeprom_name,
+			sizeof(cdata->cfg.eeprom_name));
 		break;
 	case CFG_EEPROM_GET_CAL_DATA:
 		CDBG("%s E CFG_EEPROM_GET_CAL_DATA\n", __func__);
@@ -196,7 +189,7 @@ static long msm_eeprom_subdev_ioctl(struct v4l2_subdev *sd,
 	struct msm_eeprom_ctrl_t *e_ctrl = v4l2_get_subdevdata(sd);
 	void __user *argp = (void __user *)arg;
 	CDBG("%s E\n", __func__);
-	CDBG("%s:%d a_ctrl %p argp %p\n", __func__, __LINE__, e_ctrl, argp);
+	CDBG("%s:%d a_ctrl %pK argp %pK\n", __func__, __LINE__, e_ctrl, argp);
 	switch (cmd) {
 	case VIDIOC_MSM_SENSOR_GET_SUBDEV_ID:
 		return msm_eeprom_get_subdev_id(e_ctrl, argp);
@@ -267,8 +260,6 @@ static const struct v4l2_subdev_internal_ops msm_eeprom_internal_ops = {
 	.open = msm_eeprom_open,
 	.close = msm_eeprom_close,
 };
-
-
 /**
   * read_eeprom_memory() - read map data into buffer
   * @e_ctrl:	eeprom control struct
@@ -337,6 +328,7 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 		}
 
 		if (emap[j].mem.valid_size) {
+			#if 0
 			e_ctrl->i2c_client.addr_type = emap[j].mem.addr_t;
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
 				&(e_ctrl->i2c_client), emap[j].mem.addr,
@@ -346,6 +338,31 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 				return rc;
 			}
 			memptr += emap[j].mem.valid_size;
+			#else
+			if( strcmp("zfg_gt24c16",eb_info->eeprom_name) == 0
+				|| strcmp("zfg_gt24c16_imx214",eb_info->eeprom_name) == 0){
+			   e_ctrl->i2c_client.cci_client->sid = emap[j].mem.addr;
+			   e_ctrl->i2c_client.addr_type = emap[j].mem.addr_t;
+			   rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
+				  &(e_ctrl->i2c_client), 0,
+				  memptr, emap[j].mem.valid_size);
+			   if (rc < 0) {
+				  pr_err("%s: read failed\n", __func__);
+				  return rc;
+			}
+			  memptr += emap[j].mem.valid_size;
+			}else{
+			   e_ctrl->i2c_client.addr_type = emap[j].mem.addr_t;
+			   rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
+				  &(e_ctrl->i2c_client), emap[j].mem.addr,
+				  memptr, emap[j].mem.valid_size);
+			   if (rc < 0) {
+				  pr_err("%s: read failed\n", __func__);
+				  return rc;
+			}
+			  memptr += emap[j].mem.valid_size;
+		  }
+		  #endif
 		}
 		if (emap[j].pageen.valid_size) {
 			e_ctrl->i2c_client.addr_type = emap[j].pageen.addr_t;
@@ -867,22 +884,15 @@ static int msm_eeprom_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 {
 	struct msm_eeprom_cfg_data *cdata = (struct msm_eeprom_cfg_data *)argp;
 	int rc = 0;
-	size_t length = 0;
 
 	CDBG("%s E\n", __func__);
 	switch (cdata->cfgtype) {
 	case CFG_EEPROM_GET_INFO:
 		CDBG("%s E CFG_EEPROM_GET_INFO\n", __func__);
 		cdata->is_supported = e_ctrl->is_supported;
-		length = strlen(e_ctrl->eboard_info->eeprom_name) + 1;
-		if (length > MAX_EEPROM_NAME) {
-			pr_err("%s:%d invalid eeprom name length %d\n",
-				__func__, __LINE__, (int)length);
-			rc = -EINVAL;
-			break;
-		}
 		memcpy(cdata->cfg.eeprom_name,
-			e_ctrl->eboard_info->eeprom_name, length);
+			e_ctrl->eboard_info->eeprom_name,
+			sizeof(cdata->cfg.eeprom_name));
 		break;
 	case CFG_EEPROM_GET_CAL_DATA:
 		CDBG("%s E CFG_EEPROM_GET_CAL_DATA\n", __func__);
@@ -908,7 +918,7 @@ static long msm_eeprom_subdev_ioctl32(struct v4l2_subdev *sd,
 	void __user *argp = (void __user *)arg;
 
 	CDBG("%s E\n", __func__);
-	CDBG("%s:%d a_ctrl %p argp %p\n", __func__, __LINE__, e_ctrl, argp);
+	CDBG("%s:%d a_ctrl %pK argp %pK\n", __func__, __LINE__, e_ctrl, argp);
 	switch (cmd) {
 	case VIDIOC_MSM_SENSOR_GET_SUBDEV_ID:
 		return msm_eeprom_get_subdev_id(e_ctrl, argp);
@@ -938,137 +948,9 @@ static long msm_eeprom_subdev_fops_ioctl32(struct file *file, unsigned int cmd,
 
 #endif
 
-#ifndef  CONFIG_VEGETALTE_COMMON
-static camera_vendor_module_id imx214_get_otp_vendor_module_id(struct msm_eeprom_ctrl_t *e_ctrl)
-{
-	int pageIndex = 0;
-	uint8_t mid=0;
-	uint8_t flag=0;
-	uint8_t PageSize = 64;
-	uint8_t *buffer = e_ctrl->cal_data.mapdata;
-	bool rc = false;
-
-	for (pageIndex = 2; pageIndex > -1; pageIndex--)
-	{
-		mid = buffer[1+PageSize*pageIndex];
-		switch(mid){
-			case MID_OFILM:
-			case MID_SUNNY:
-				flag = buffer[PageSize*pageIndex];
-				rc = (flag == 0x1) ? true : false;
-				break;
-			case MID_TRULY:
-				flag = buffer[63+PageSize*pageIndex];
-				rc = (flag == 0x0) ? true : false;
-				break;
-			default:
-				flag = 0;
-				mid = 0;
-				rc = false;
-				break;
-		}
-		if(rc==true) break;
-	}
-	if(rc==false) mid = MID_NULL;
-	return mid;
-
-}
-
-static camera_vendor_module_id s5k5e2_get_otp_vendor_module_id(struct msm_eeprom_ctrl_t *e_ctrl)
-{
-	int pageIndex, groupIndex;
-	uint8_t mid=0;
-	uint8_t flag=0;
-	uint8_t PageSize = 64;
-	uint8_t GroupSize = 32;
-	uint8_t *buffer = e_ctrl->cal_data.mapdata;
-	bool rc = false;
-
-	for (pageIndex=0;pageIndex<2;pageIndex++){
-		for (groupIndex=0;groupIndex<2;groupIndex++){
-			mid = buffer[PageSize*pageIndex + GroupSize*groupIndex];
-			switch(mid){
-				case MID_OFILM:
-				case MID_KINGCOM:
-					flag = buffer[PageSize*pageIndex+GroupSize*groupIndex+(GroupSize-1)];
-					rc = (flag == 0x1) ? true : false;
-					break;
-				default:
-					flag = 0;
-					mid = 0;
-					rc = false;
-					break;
-			}
-			if(rc==true) break;
-		}
-		if(rc==true) break;
-	}
-	if(rc==false) mid = MID_NULL;
-	return mid;
-}
-
-static uint8_t get_otp_vendor_module_id(struct msm_eeprom_ctrl_t *e_ctrl, const char *eeprom_name)
-{
-	camera_vendor_module_id module_id=MID_NULL;
-	if((strcmp(eeprom_name, "imx214_olqba15") == 0)
-		|| (strcmp(eeprom_name, "imx214_f13n05e") == 0)
-		|| (strcmp(eeprom_name, "imx214_f13n05k") == 0)
-		|| (strcmp(eeprom_name, "imx214_olqba22") == 0)
-		|| (strcmp(eeprom_name, "imx214_cma846") == 0)){
-		module_id = imx214_get_otp_vendor_module_id(e_ctrl);
-	}else if(strcmp(eeprom_name,"s5k5e2_olq5f24") == 0
-		|| (strcmp(eeprom_name, "s5k5e2_s7b5") == 0)){
-		module_id = s5k5e2_get_otp_vendor_module_id(e_ctrl);
-	}
-	pr_info("%s eeprom_name=%s, module_id=%d\n",__func__,eeprom_name,module_id);
-	if(module_id>=MID_MAX) module_id = MID_NULL;
-
-	return ((uint8_t)module_id);
-}
-#endif
-
-#ifdef CONFIG_VEGETALTE_COMMON
-uint8_t g_imx214_module_id = 0;
-uint8_t g_af_driver_ic_id = 0;
-
-void imx214_set_otp_module_id(struct msm_eeprom_ctrl_t *e_ctrl)
-{
-	int pageIndex = 0;
-	uint8_t mid;
-	uint8_t wb_flag;
-	uint8_t PageCount = 64;
-	uint8_t *buffer = e_ctrl->cal_data.mapdata;
-
-	for (pageIndex=0; pageIndex<3; pageIndex++) {
-		mid = buffer[1+PageCount*pageIndex];
-		CDBG("%s mid=%x\n", __func__,mid);
-		if(mid == MID_TRULY) { //imx214 truly
-			wb_flag = buffer[63 + PageCount*pageIndex];
-			CDBG("%s truly wb_flag=%x\n", __func__,wb_flag);
-
-			if(wb_flag == 0x00) {
-				CDBG("imx214_set_otp_module_id imx214 truly module \n");
-				g_imx214_module_id = mid;
-				if(	((buffer[2+PageCount*pageIndex] == 15) && (buffer[3+PageCount*pageIndex] >= 0x09))
-					|| (buffer[2+PageCount*pageIndex] > 15) ) // after 201509
-					g_af_driver_ic_id = 0x01;  // for 846
-				else
-					g_af_driver_ic_id = 0x02;  // cm9886
-				CDBG("imx214_truly module driver id 0x%02x\n", g_af_driver_ic_id);	
-				break;
-			}
-		}
-	}
-	
-	if(pageIndex >= 3)
-		pr_err("imx214_set_otp_module_id unknown imx214 module \n");
-}
-#endif
-
 static int msm_eeprom_platform_probe(struct platform_device *pdev)
 {
 	int rc = 0;
-	int j = 0;
 	uint32_t temp;
 
 	struct msm_camera_cci_client *cci_client = NULL;
@@ -1192,27 +1074,21 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 		pr_err("%s read_eeprom_memory failed\n", __func__);
 		goto power_down;
 	}
+	#if 0
 	for (j = 0; j < e_ctrl->cal_data.num_data; j++)
 		CDBG("memory_data[%d] = 0x%X\n", j,
 			e_ctrl->cal_data.mapdata[j]);
-#ifndef  CONFIG_VEGETALTE_COMMON
-	if(eb_info->eeprom_name != NULL){
-		s_vendor_eeprom[pdev->id].module_id = get_otp_vendor_module_id(e_ctrl, eb_info->eeprom_name);
-		strcpy(s_vendor_eeprom[pdev->id].eeprom_name, eb_info->eeprom_name);
-	}
-#endif
-#ifdef CONFIG_VEGETALTE_COMMON
-	if( (eb_info->eeprom_name != NULL)
-                && (   (strcmp(eb_info->eeprom_name, "truly_cm9886qr") == 0)
-                        || (strcmp(eb_info->eeprom_name, "imx214_cma846") == 0)
-                ) )
-        {
-                CDBG("imx214 name = %s\n",eb_info->eeprom_name);
-                imx214_set_otp_module_id(e_ctrl);
-        }
-#endif
+    #endif
 	e_ctrl->is_supported |= msm_eeprom_match_crc(&e_ctrl->cal_data);
 
+	if( !(strcmp("zfg_gt24c16",e_ctrl->eboard_info->eeprom_name))
+		|| !(strcmp("zfg_gt24c16_imx214",e_ctrl->eboard_info->eeprom_name))){
+        msm_sensorinfo_set_back_sensor_module_id(e_ctrl->cal_data.mapdata[0],8);
+	}else{
+		msm_sensorinfo_set_back_sensor_module_id(e_ctrl->cal_data.mapdata[2],16);
+	}
+
+	
 	rc = msm_camera_power_down(power_info, e_ctrl->eeprom_device_type,
 		&e_ctrl->i2c_client);
 	if (rc) {

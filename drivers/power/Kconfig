@@ -404,6 +404,18 @@ config SMB1360_CHARGER_FG
 	  The driver reports the status via the power supply framework.
 	  A status change triggers an IRQ via the device STAT pin.
 
+config BATTERY_PROFILE_B
+	tristate "Select Profile B"
+	depends on I2C
+	help
+	  Say Y to Select Profile B
+
+config CHARGE_CURRENT_1A2
+	tristate "SET CHARGE CURRENT LIMIT TO 1A2"
+	depends on I2C
+	help
+	  Say Y to SET CURRENT.
+
 config SMB1360_CHARGER_FG_VEGETALTE
 	tristate "SMB1360 Charger and Fuel Guage"
 	depends on I2C

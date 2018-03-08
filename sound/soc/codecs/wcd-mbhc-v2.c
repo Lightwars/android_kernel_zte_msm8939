@@ -23,8 +23,6 @@
 #include <linux/pm_runtime.h>
 #include <linux/kernel.h>
 #include <linux/input.h>
-#include <linux/mfd/wcd9xxx/core.h>
-#include <linux/mfd/wcd9xxx/pdata.h>
 #include <linux/firmware.h>
 #include <linux/completion.h>
 #include <glink_private.h>
@@ -36,8 +34,6 @@
 #ifdef ZTE_HEADSET_STATE_PROC
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
-#include "msm8x16_wcd_registers.h"
-#include "msm8916-wcd-irq.h"
 #endif
 
 #define ZTE_MAKE_HEADSET_DETECT_STABLE
@@ -74,7 +70,6 @@
 #define WCD_MBHC_BTN_PRESS_COMPL_TIMEOUT_MS  50
 
 static int det_extn_cable_en;
-
 #ifdef   CONFIG_ZTE_HEADSET_GPIO
 struct headset_gpio_pinctrl_info {
 	struct pinctrl *pinctrl;
@@ -88,63 +83,17 @@ module_param(det_extn_cable_en, int,
 		S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(det_extn_cable_en, "enable/disable extn cable detect");
 
-
-#define WCD_MBHC_RSC_LOCK(mbhc)			\
-{							\
-	pr_debug("%s: Acquiring BCL\n", __func__);	\
-	mutex_lock(&mbhc->codec_resource_lock);		\
-	pr_debug("%s: Acquiring BCL done\n", __func__);	\
-}
-
-#define WCD_MBHC_RSC_UNLOCK(mbhc)			\
-{							\
-	pr_debug("%s: Release BCL\n", __func__);	\
-	mutex_unlock(&mbhc->codec_resource_lock);	\
-}
-
-#define WCD_MBHC_RSC_ASSERT_LOCKED(mbhc)		\
-{							\
-	WARN_ONCE(!mutex_is_locked(&mbhc->codec_resource_lock), \
-		  "%s: BCL should have acquired\n", __func__); \
-}
-
 enum wcd_mbhc_cs_mb_en_flag {
 	WCD_MBHC_EN_CS = 0,
 	WCD_MBHC_EN_MB,
 	WCD_MBHC_EN_PULLUP,
 	WCD_MBHC_EN_NONE,
 };
-
-
-static void wcd_configure_cap(struct wcd_mbhc *mbhc, bool micbias2)
-{
-	u16 micbias1;
-	struct snd_soc_codec *codec = mbhc->codec;
-
-	micbias1 = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MICB_1_EN);
-	pr_debug("\n %s: micbias1 %x micbias2 = %d\n", __func__, micbias1,
-			micbias2);
-	if ((micbias1 & 0x80) && micbias2) {
-		if ((mbhc->micbias1_cap_mode == MICBIAS_EXT_BYP_CAP) ||
-			(mbhc->micbias2_cap_mode == MICBIAS_EXT_BYP_CAP))
-			snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_ANALOG_MICB_1_EN,
-				0x40, (MICBIAS_EXT_BYP_CAP << 6));
-		else
-			snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_ANALOG_MICB_1_EN,
-				0x40, (MICBIAS_NO_EXT_BYP_CAP << 6));
-	} else if (micbias2) {
-		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_MICB_1_EN,
-				0x40, (mbhc->micbias2_cap_mode << 6));
-	} else if (micbias1 & 0x80) {
-		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_MICB_1_EN,
-				0x40, (mbhc->micbias1_cap_mode << 6));
-	} else {
-		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_MICB_1_EN,
-				0x40, 0x00);
-	}
-}
+#ifdef CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
+extern bool aw8736_ext_spk_power_amp_on(int);
+extern bool hphr_channel_on(int);
+extern void schedule_delay_pa_on(void);
+#endif //CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
 
 static void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 				struct snd_soc_jack *jack, int status, int mask)
@@ -467,6 +416,9 @@ out_micb_en:
 			hphrocp_off_report(mbhc, SND_JACK_OC_HPHR);
 		clear_bit(WCD_MBHC_EVENT_PA_HPHR, &mbhc->event_state);
 		/* check if micbias is enabled */
+#ifdef CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
+		aw8736_ext_spk_power_amp_on(0);
+#endif //CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
 		if (micbias2)
 			/* Disable cs, pullup & enable micbias */
 			wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_MB);
@@ -488,12 +440,24 @@ out_micb_en:
 	case WCD_EVENT_PRE_HPHR_PA_ON:
 		set_bit(WCD_MBHC_EVENT_PA_HPHR, &mbhc->event_state);
 		/* check if micbias is enabled */
+#ifdef CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
+		schedule_delay_pa_on();
+		if (mbhc->current_plug != MBHC_PLUG_TYPE_NONE) {
+			if (micbias2)
+				/* Disable cs, pullup & enable micbias */
+				wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_MB);
+			else
+				/* Disable micbias, enable pullup & cs */
+				wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_PULLUP);
+		}
+#else
 		if (micbias2)
 			/* Disable cs, pullup & enable micbias */
 			wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_MB);
 		else
 			/* Disable micbias, enable pullup & cs */
 			wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_PULLUP);
+#endif //CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
 		break;
 	default:
 		break;
@@ -553,7 +517,9 @@ static void wcd_mbhc_clr_and_turnon_hph_padac(struct wcd_mbhc *mbhc)
 {
 	bool pa_turned_on = false;
 	u8 wg_time;
-
+#ifdef CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
+       hphr_channel_on(0);
+#endif //CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
 	WCD_MBHC_REG_READ(WCD_MBHC_HPH_CNP_WG_TIME, wg_time);
 	wg_time += 1;
 
@@ -581,6 +547,25 @@ static void wcd_mbhc_clr_and_turnon_hph_padac(struct wcd_mbhc *mbhc)
 	}
 }
 
+#ifdef CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
+static bool wcd_mbhc_is_hphr_pa_on(struct wcd_mbhc *mbhc)
+{
+	bool hph_pa_on = false;
+
+	WCD_MBHC_REG_READ(WCD_MBHC_HPH_PA_EN, hph_pa_on);
+
+	return (hph_pa_on) ? true : false;
+}
+static bool wcd_mbhc_is_hphl_pa_on(struct wcd_mbhc *mbhc)
+{
+	bool hph_pa_on = false;
+
+	WCD_MBHC_REG_READ(WCD_MBHC_HPH_PA_EN, hph_pa_on);
+
+	return (hph_pa_on) ? true : false;
+}
+#else
+
 static bool wcd_mbhc_is_hph_pa_on(struct wcd_mbhc *mbhc)
 {
 	bool hph_pa_on = false;
@@ -589,6 +574,7 @@ static bool wcd_mbhc_is_hph_pa_on(struct wcd_mbhc *mbhc)
 
 	return (hph_pa_on) ? true : false;
 }
+#endif //CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
 
 static void wcd_mbhc_set_and_turnoff_hph_padac(struct wcd_mbhc *mbhc)
 {
@@ -599,6 +585,22 @@ static void wcd_mbhc_set_and_turnoff_hph_padac(struct wcd_mbhc *mbhc)
 
 	/* If headphone PA is on, check if userspace receives
 	* removal event to sync-up PA's state */
+#ifdef CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
+	if (wcd_mbhc_is_hphl_pa_on(mbhc)) {
+		pr_debug("%s PA is on, setting PA_OFF_ACK\n", __func__);
+		set_bit(WCD_MBHC_HPHL_PA_OFF_ACK, &mbhc->hph_pa_dac_state);
+		set_bit(WCD_MBHC_HPHR_PA_OFF_ACK, &mbhc->hph_pa_dac_state);
+	} else {
+		pr_debug("%s LPA is off\n", __func__);
+	}
+	if (wcd_mbhc_is_hphr_pa_on(mbhc)) {
+		pr_debug("%s PA is on, setting PA_OFF_ACK\n", __func__);
+		set_bit(WCD_MBHC_HPHL_PA_OFF_ACK, &mbhc->hph_pa_dac_state);
+		set_bit(WCD_MBHC_HPHR_PA_OFF_ACK, &mbhc->hph_pa_dac_state);
+	} else {
+		pr_debug("%s RPA is off\n", __func__);
+	}
+#else
 	if (wcd_mbhc_is_hph_pa_on(mbhc)) {
 		pr_debug("%s PA is on, setting PA_OFF_ACK\n", __func__);
 		set_bit(WCD_MBHC_HPHL_PA_OFF_ACK, &mbhc->hph_pa_dac_state);
@@ -606,6 +608,7 @@ static void wcd_mbhc_set_and_turnoff_hph_padac(struct wcd_mbhc *mbhc)
 	} else {
 		pr_debug("%s PA is off\n", __func__);
 	}
+#endif //CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPH_PA_EN, 0);
 	usleep_range(wg_time * 1000, wg_time * 1000 + 50);
 }
@@ -626,9 +629,13 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				enum snd_jack_types jack_type)
 {
 	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
-
+#ifdef    OPEN_HEADSET_REPORT_LOG   
+	pr_info("%s: enter insertion %d hph_status %x\n",
+		 __func__, insertion, mbhc->hph_status);
+#else
 	pr_debug("%s: enter insertion %d hph_status %x\n",
 		 __func__, insertion, mbhc->hph_status);
+#endif
 #ifdef ZTE_HEADSET_STATE_PROC
     if(insertion)
     {
@@ -688,7 +695,11 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 			 jack_type, mbhc->hph_status);
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
 				mbhc->hph_status, WCD_MBHC_JACK_MASK);
+#ifdef CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
+//
+#else
 		wcd_mbhc_set_and_turnoff_hph_padac(mbhc);
+#endif //CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
 		hphrocp_off_report(mbhc, SND_JACK_OC_HPHR);
 		hphlocp_off_report(mbhc, SND_JACK_OC_HPHL);
 		mbhc->current_plug = MBHC_PLUG_TYPE_NONE;
@@ -804,9 +815,13 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 					 enum wcd_mbhc_plug_type plug_type)
 {
+#ifdef    OPEN_HEADSET_REPORT_LOG   
+	pr_info("%s: enter current_plug(%d) new_plug(%d)\n",
+		 __func__, mbhc->current_plug, plug_type);
+#else
 	pr_debug("%s: enter current_plug(%d) new_plug(%d)\n",
 		 __func__, mbhc->current_plug, plug_type);
-
+#endif
 	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
 
 	if (mbhc->current_plug == plug_type) {
@@ -1001,6 +1016,111 @@ static bool wcd_is_special_headset(struct wcd_mbhc *mbhc)
 	return ret;
 }
 
+#ifdef   CONFIG_ZTE_HEADSET_GPIO
+void zte_headset_gpio_handler(struct work_struct *work)
+{
+      struct wcd_mbhc *mbhc = NULL;
+      struct snd_soc_codec *codec = NULL;	  
+	struct delayed_work *dwork;
+	bool detection_type;
+	bool micbias1 = false;	
+	
+	micbias1 = mbhc->mbhc_cb->micbias_enable_status(mbhc,
+								MIC_BIAS_1);
+	dwork = to_delayed_work(work);
+	mbhc = container_of(dwork, struct wcd_mbhc,
+				headset_gpio_detect_work);
+      codec = mbhc->codec;
+	pr_debug("%s: enter\n", __func__);	
+	//mutex_lock(&mbhc->headset_gpio_detect_mutex);
+	/* cancel pending button press */
+	if (wcd_cancel_btn_work(mbhc))
+		pr_debug("%s:zte add  button press is canceled\n", __func__);
+	
+	if (mbhc->current_plug == MBHC_PLUG_TYPE_NONE) {
+      pr_debug("%s:zte  currren headset not insert,need return\n", __func__);
+     return;
+     }
+		
+	detection_type =	gpio_get_value_cansleep(mbhc->gpio) ==
+			mbhc->gpio_level_insert ;
+
+	if(detection_type == 1)
+	{
+	pr_err("%s:zte  gpio headset not need reprot insert  ,need return\n", __func__);	
+	return;
+	}
+	pr_err("%s: mbhc->current_plug: %d detection_type: %d\n", __func__,
+			mbhc->current_plug, detection_type);
+	
+	WCD_MBHC_RSC_LOCK(mbhc);
+	mbhc->in_swch_irq_handler = true;	
+	
+  if ((mbhc->current_plug != MBHC_PLUG_TYPE_NONE) && !detection_type) {
+		/* Disable external voltage source to micbias if present */
+		if (mbhc->mbhc_cb && mbhc->mbhc_cb->enable_mb_source)
+			mbhc->mbhc_cb->enable_mb_source(codec, false);
+		/* Disable HW FSM */
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
+		if (mbhc->mbhc_cb->mbhc_common_micb_ctrl)
+			mbhc->mbhc_cb->mbhc_common_micb_ctrl(codec,
+					MBHC_COMMON_MICB_TAIL_CURR, false);
+		if (mbhc->mbhc_cb->set_cap_mode)
+			mbhc->mbhc_cb->set_cap_mode(codec, micbias1, false);
+		mbhc->btn_press_intr = false;
+		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE) {
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADPHONE);
+		} else if (mbhc->current_plug == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_UNSUPPORTED);
+		} else if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
+			/* make sure to turn off Rbias */
+			if (mbhc->mbhc_cb->micb_internal)
+				mbhc->mbhc_cb->micb_internal(codec, 1, false);
+			/* Pulldown micbias */
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_PULLDOWN_CTRL, 1);
+		
+			mbhc->mbhc_cb->irq_control(codec,
+					mbhc->intr_ids->mbhc_hs_rem_intr,
+					false);
+			mbhc->mbhc_cb->irq_control(codec,
+					mbhc->intr_ids->mbhc_hs_ins_intr,
+					false);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE,
+						 1);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_SCHMT_ISRC, 0);
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADSET);
+		} else if (mbhc->current_plug == MBHC_PLUG_TYPE_HIGH_HPH) {
+			mbhc->mbhc_cb->irq_control(codec,
+					mbhc->intr_ids->mbhc_hs_rem_intr,
+					false);
+			mbhc->mbhc_cb->irq_control(codec,
+					mbhc->intr_ids->mbhc_hs_ins_intr,
+					false);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE,
+						 1);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_SCHMT_ISRC, 0);
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_LINEOUT);
+		}
+	} 
+      else{
+	pr_err("%s: zte goto  invalid  plug out state \n", __func__);
+	}
+	//mutex_unlock(&mbhc->headset_gpio_detect_mutex);
+	mbhc->in_swch_irq_handler = false;
+	WCD_MBHC_RSC_UNLOCK(mbhc);
+
+       if(mbhc->hph_switch > 0)
+       {
+	gpio_direction_output(mbhc->hph_switch, 0);//if the headset plug out,so switch to PMIC
+	dev_dbg(codec->dev, "%s: if the headset plug out,so switch to PMIC \n",
+			__func__);		
+	 }	
+	pr_debug("%s: leave\n", __func__);
+	
+}
+#endif
+
 static void wcd_mbhc_update_fsm_source(struct wcd_mbhc *mbhc,
 				       enum wcd_mbhc_plug_type plug_type)
 {
@@ -1064,119 +1184,6 @@ static void wcd_enable_mbhc_supply(struct wcd_mbhc *mbhc,
 		}
 	}
 }
-
-#ifdef   CONFIG_ZTE_HEADSET_GPIO
-void zte_headset_gpio_handler(struct work_struct *work)
-{
-      struct wcd_mbhc *mbhc = NULL;
-      struct snd_soc_codec *codec = NULL;	  
-	struct delayed_work *dwork;
-	bool detection_type;	
-	dwork = to_delayed_work(work);
-	mbhc = container_of(dwork, struct wcd_mbhc,
-				headset_gpio_detect_work);
-      codec = mbhc->codec;
-	pr_debug("%s: enter\n", __func__);	
-	//mutex_lock(&mbhc->headset_gpio_detect_mutex);
-	/* cancel pending button press */
-	if (wcd_cancel_btn_work(mbhc))
-		pr_debug("%s:zte add  button press is canceled\n", __func__);
-	
-	if (mbhc->current_plug == MBHC_PLUG_TYPE_NONE) {
-      pr_debug("%s:zte  currren headset not insert,need return\n", __func__);
-     return;
-     }
-		
-	detection_type =	gpio_get_value_cansleep(mbhc->gpio) ==
-			mbhc->gpio_level_insert ;
-
-	if(detection_type == 1)
-	{
-	pr_err("%s:zte  gpio headset not need reprot insert  ,need return\n", __func__);	
-	return;
-	}
-	pr_err("%s: mbhc->current_plug: %d detection_type: %d\n", __func__,
-			mbhc->current_plug, detection_type);
-	
-	WCD_MBHC_RSC_LOCK(mbhc);
-	mbhc->in_swch_irq_handler = true;	
-	
-  if ((mbhc->current_plug != MBHC_PLUG_TYPE_NONE) && !detection_type) {
-		/* Disable external voltage source to micbias if present */
-		if (mbhc->mbhc_cb && mbhc->mbhc_cb->enable_mb_source)
-			mbhc->mbhc_cb->enable_mb_source(codec, false);
-		/* Disable HW FSM */
-		snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-				0xB0, 0x00);
-		snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_ANALOG_MICB_1_EN,
-				0x04, 0x00);
-		wcd_configure_cap(mbhc, false);
-		mbhc->btn_press_intr = false;
-		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE) {
-			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADPHONE);
-		} else if (mbhc->current_plug == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
-			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_UNSUPPORTED);
-		} else if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
-			/* make sure to turn off Rbias */
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_MICB_1_INT_RBIAS,
-					0x18, 0x08);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_MICB_2_EN,
-					0x20, 0x20);
-		
-			wcd9xxx_spmi_disable_irq(
-					mbhc->intr_ids->mbhc_hs_rem_intr);
-			wcd9xxx_spmi_disable_irq(
-					mbhc->intr_ids->mbhc_hs_ins_intr);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_1,
-					0x01, 0x01);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2,
-					0x06, 0x00);
-			/* Enable current source */
-			snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-				0x30, 0x30);
-			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADSET);
-		} else if (mbhc->current_plug == MBHC_PLUG_TYPE_HIGH_HPH) {
-			wcd9xxx_spmi_disable_irq(
-					mbhc->intr_ids->mbhc_hs_rem_intr);
-			wcd9xxx_spmi_disable_irq(
-					mbhc->intr_ids->mbhc_hs_ins_intr);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_1,
-					0x01, 0x01);
-			snd_soc_update_bits(codec,
-					MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2,
-					0x06, 0x00);
-			/* Enable current source */
-			snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-				0x30, 0x30);
-			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_LINEOUT);
-		}
-	} 
-      else{
-	pr_err("%s: zte goto  invalid  plug out state \n", __func__);
-	}
-	//mutex_unlock(&mbhc->headset_gpio_detect_mutex);
-	mbhc->in_swch_irq_handler = false;
-	WCD_MBHC_RSC_UNLOCK(mbhc);
-
-       if(mbhc->hph_switch > 0)
-       {
-	gpio_direction_output(mbhc->hph_switch, 0);//if the headset plug out,so switch to PMIC
-	dev_dbg(codec->dev, "%s: if the headset plug out,so switch to PMIC \n",
-			__func__);		
-	 }	
-	pr_debug("%s: leave\n", __func__);
-	
-}
-#endif
 
 static void wcd_correct_swch_plug(struct work_struct *work)
 {
@@ -1244,8 +1251,9 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 
 	pr_debug("%s: Valid plug found, plug type is %d\n",
 			 __func__, plug_type);
-	if (plug_type == MBHC_PLUG_TYPE_HEADSET ||
-	    plug_type == MBHC_PLUG_TYPE_HEADPHONE) {
+	if ((plug_type == MBHC_PLUG_TYPE_HEADSET ||
+	    plug_type == MBHC_PLUG_TYPE_HEADPHONE) &&
+	    (!mbhc->btn_press_intr)) {
 		WCD_MBHC_RSC_LOCK(mbhc);
 		wcd_mbhc_find_plug_and_report(mbhc, plug_type);
 		WCD_MBHC_RSC_UNLOCK(mbhc);
@@ -1503,61 +1511,6 @@ static void wcd_mbhc_detect_plug_type(struct wcd_mbhc *mbhc)
 	pr_debug("%s: leave\n", __func__);
 }
 
-#ifdef WCD_MBHC_HS_WAKEUP
-static void wcd_mbhc_report_wakeup(struct wcd_mbhc *mbhc, bool insert)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&mbhc->fb_lock, flags);
-	if (!mbhc->fb_off) {
-		pr_debug("%s: insert = %d, fb_off = %d\n",
-			__func__, insert, mbhc->fb_off);
-		spin_unlock_irqrestore(&mbhc->fb_lock, flags);
-		return;
-	}
-	spin_unlock_irqrestore(&mbhc->fb_lock, flags);
-
-	pr_notice("%s: report WAKEUP\n", __func__);
-	mbhc->buttons_pressed |= SND_JACK_BTN_5;
-
-	wcd_mbhc_jack_report(mbhc, &mbhc->button_jack,
-		mbhc->buttons_pressed, mbhc->buttons_pressed);
-	wcd_mbhc_jack_report(mbhc, &mbhc->button_jack,
-		0, mbhc->buttons_pressed);
-
-	mbhc->buttons_pressed &= ~SND_JACK_BTN_5;
-}
-
-#include <linux/fb.h>
-static int wcd_fb_notifier_callback(struct notifier_block *self,
-	unsigned long event, void *data)
-{
-	struct fb_event *evdata = data;
-	int *blank;
-	unsigned long flags;
-	struct wcd_mbhc *mbhc =
-		container_of(self, struct wcd_mbhc, fb_notif);
-
-	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
-			mbhc) {
-		blank = evdata->data;
-		pr_debug("%s: blank = %d\n", __func__, *blank);
-		spin_lock_irqsave(&mbhc->fb_lock, flags);
-		if (*blank == FB_BLANK_POWERDOWN)
-			mbhc->fb_off = true;
-		else if (*blank == FB_BLANK_UNBLANK ||
-			*blank == FB_BLANK_NORMAL)
-			mbhc->fb_off = false;
-		else
-			pr_debug("%s: unknown fb action: %d\n",
-				__func__, *blank);
-		spin_unlock_irqrestore(&mbhc->fb_lock, flags);
-	}
-
-	return 0;
-}
-#endif
-
 static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 {
 	bool detection_type;
@@ -1591,17 +1544,19 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			mbhc->current_plug, detection_type);
 	wcd_cancel_hs_detect_plug(mbhc, &mbhc->correct_plug_swch);
 
-#ifdef WCD_MBHC_HS_WAKEUP
-	wcd_mbhc_report_wakeup(mbhc, detection_type);
-#endif
-
 	if (mbhc->mbhc_cb->micbias_enable_status)
 		micbias1 = mbhc->mbhc_cb->micbias_enable_status(mbhc,
 						MIC_BIAS_1);
 
 	if ((mbhc->current_plug == MBHC_PLUG_TYPE_NONE) &&
 	    detection_type) {
-
+#ifdef CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
+		wcd_mbhc_set_and_turnoff_hph_padac(mbhc);
+		//turn off the hph pa while insert headset irq, in order to fix the headset type detect problem
+		//while headset type detect, the hph pa must be turned off
+		hphr_channel_on(1);
+		//enable the HPHR switch, ensure the headset type detect normal
+#endif //CONFIG_FEATURE_ZTEMT_AUDIO_EXT_PA
 #ifdef   CONFIG_ZTE_HEADSET_GPIO
        if(mbhc->hph_switch > 0 )
        {
@@ -1610,7 +1565,6 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			__func__);		
 	 }	
 #endif
-
 		/* Make sure MASTER_BIAS_CTL is enabled */
 		mbhc->mbhc_cb->mbhc_bias(codec, true);
 
@@ -1638,16 +1592,14 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		wcd_mbhc_detect_plug_type(mbhc);
 	} else if ((mbhc->current_plug != MBHC_PLUG_TYPE_NONE)
 			&& !detection_type) {
-
 #ifdef   CONFIG_ZTE_HEADSET_GPIO
-       if(mbhc->hph_switch > 0)
-       {
-	gpio_direction_output(mbhc->hph_switch, 0);//if the headset plug out,so switch to PMIC
-	dev_dbg(codec->dev, "%s: if the headset plug out,so switch to PMIC int swch irq handler \n",
-			__func__);		
-	 }	
+	       if(mbhc->hph_switch > 0)
+	       {
+				gpio_direction_output(mbhc->hph_switch, 0);//if the headset plug out,so switch to PMIC
+				dev_dbg(codec->dev, "%s: if the headset plug out,so switch to PMIC int swch irq handler \n",
+				__func__);		
+		   }	
 #endif
-
 		/* Disable external voltage source to micbias if present */
 		if (mbhc->mbhc_cb->enable_mb_source)
 			mbhc->mbhc_cb->enable_mb_source(codec, false);
@@ -1704,12 +1656,12 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 #ifdef   CONFIG_ZTE_HEADSET_GPIO
-       if(mbhc->hph_switch > 0)
-       {
-	gpio_direction_output(mbhc->hph_switch, 0);//if the headset plug out,so switch to PMIC
-	dev_dbg(codec->dev, "%s: if the headset plug out,so switch to PMIC int swch irq handler \n",
+      	 if(mbhc->hph_switch > 0)
+         {
+			gpio_direction_output(mbhc->hph_switch, 0);//if the headset plug out,so switch to PMIC
+			dev_dbg(codec->dev, "%s: if the headset plug out,so switch to PMIC int swch irq handler \n",
 			__func__);		
-	 }	
+		 }	
 #endif
 	}
 
@@ -2183,13 +2135,13 @@ static irqreturn_t zte_headset_gpio_plug_detect_irq(int irq, void *data)
 	struct wcd_mbhc *mbhc = data;
 	pr_debug("%s: enter\n", __func__);
 
-	if (unlikely(wcd9xxx_spmi_lock_sleep() == false)) {
+	if (unlikely((mbhc->mbhc_cb->lock_sleep(mbhc, true)) == false)) {
 		pr_warn("%s: failed to hold suspend\n", __func__);
 		r = IRQ_NONE;
 	} else {
 		/* Call handler */
 	schedule_delayed_work(&mbhc->headset_gpio_detect_work, msecs_to_jiffies(150));	
-		wcd9xxx_spmi_unlock_sleep();
+		mbhc->mbhc_cb->lock_sleep(mbhc, false);
 	}
 	pr_debug("%s: leave %d\n", __func__, r);
 	return r;
@@ -2505,8 +2457,6 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 #endif
 	const char *hph_switch = "qcom,msm-mbhc-hphl-swh";
 	const char *gnd_switch = "qcom,msm-mbhc-gnd-swh";
-	const char *ext1_cap = "qcom,msm-micbias1-ext-cap";
-	const char *ext2_cap = "qcom,msm-micbias2-ext-cap";
 #ifdef   CONFIG_ZTE_HEADSET_GPIO
        const char  *zte_headset_gpio ="qcom,headset_detect_irq";
 #endif
@@ -2529,13 +2479,6 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 			"%s: missing %s in dt node\n", __func__, gnd_switch);
 		goto err;
 	}
-	mbhc->micbias1_cap_mode =
-		(of_property_read_bool(card->dev->of_node, ext1_cap) ?
-		MICBIAS_EXT_BYP_CAP : MICBIAS_NO_EXT_BYP_CAP);
-
-	mbhc->micbias2_cap_mode =
-		(of_property_read_bool(card->dev->of_node, ext2_cap) ?
-		MICBIAS_EXT_BYP_CAP : MICBIAS_NO_EXT_BYP_CAP);
 
 #ifdef   CONFIG_ZTE_HEADSET_GPIO
 pr_debug("%s: zte debug goto here : %d\n", __func__,
@@ -2703,17 +2646,6 @@ pr_debug("%s: zte debug goto here : %d\n", __func__,
 			return ret;
 		}
 
-#ifdef WCD_MBHC_HS_WAKEUP
-		ret = snd_jack_set_key(mbhc->button_jack.jack,
-				       SND_JACK_BTN_5,
-				       KEY_WAKEUP);
-		if (ret) {
-			pr_err("%s: Failed to set code for btn-5\n",
-				__func__);
-			return ret;
-		}
-#endif
-
 		set_bit(INPUT_PROP_NO_DUMMY_RELEASE,
 			mbhc->button_jack.jack->input_dev->propbit);
 
@@ -2721,12 +2653,11 @@ pr_debug("%s: zte debug goto here : %d\n", __func__,
 				  wcd_mbhc_fw_read);
 		INIT_DELAYED_WORK(&mbhc->mbhc_btn_dwork, wcd_btn_lpress_fn);
 	}
-	mutex_init(&mbhc->hphl_pa_lock);
-	mutex_init(&mbhc->hphr_pa_lock);
-
 #ifdef   CONFIG_ZTE_HEADSET_GPIO
 INIT_DELAYED_WORK(&mbhc->headset_gpio_detect_work, zte_headset_gpio_handler);
 #endif
+	mutex_init(&mbhc->hphl_pa_lock);
+	mutex_init(&mbhc->hphr_pa_lock);
 
 	/* Register event notifier */
 	mbhc->nblock.notifier_call = wcd_event_notify;
@@ -2749,17 +2680,6 @@ INIT_DELAYED_WORK(&mbhc->headset_gpio_detect_work, zte_headset_gpio_handler);
 
 	init_waitqueue_head(&mbhc->wait_btn_press);
 	mutex_init(&mbhc->codec_resource_lock);
-
-#ifdef WCD_MBHC_HS_WAKEUP
-	mbhc->fb_notif.notifier_call = wcd_fb_notifier_callback;
-	ret = fb_register_client(&mbhc->fb_notif);
-	if (ret) {
-		pr_err("%s: register fb_notifier failed %d !\n",
-			  __func__, ret);
-		mbhc->fb_off = false;
-	}
-	spin_lock_init(&mbhc->fb_lock);
-#endif
 
 #ifdef   CONFIG_ZTE_HEADSET_GPIO
 	mutex_init(&mbhc->headset_gpio_detect_mutex);
@@ -2860,9 +2780,6 @@ err_btn_release_irq:
 err_btn_press_irq:
 	mbhc->mbhc_cb->free_irq(codec, mbhc->intr_ids->mbhc_sw_intr, mbhc);
 err_mbhc_sw_irq:
-#ifdef WCD_MBHC_HS_WAKEUP
-	fb_unregister_client(&mbhc->fb_notif);
-#endif
 	if (mbhc->mbhc_cb->register_notifier)
 		mbhc->mbhc_cb->register_notifier(codec, &mbhc->nblock, false);
 	mutex_destroy(&mbhc->codec_resource_lock);
@@ -2885,9 +2802,6 @@ void wcd_mbhc_deinit(struct wcd_mbhc *mbhc)
 	mbhc->mbhc_cb->free_irq(codec, mbhc->intr_ids->mbhc_hs_rem_intr, mbhc);
 	mbhc->mbhc_cb->free_irq(codec, mbhc->intr_ids->hph_left_ocp, mbhc);
 	mbhc->mbhc_cb->free_irq(codec, mbhc->intr_ids->hph_right_ocp, mbhc);
-#ifdef WCD_MBHC_HS_WAKEUP
-	fb_unregister_client(&mbhc->fb_notif);
-#endif
 	if (mbhc->mbhc_cb && mbhc->mbhc_cb->register_notifier)
 		mbhc->mbhc_cb->register_notifier(codec, &mbhc->nblock, false);
 	mutex_destroy(&mbhc->codec_resource_lock);

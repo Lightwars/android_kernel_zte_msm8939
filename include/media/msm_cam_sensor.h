@@ -272,7 +272,7 @@ struct msm_eeprom_cfg_data {
 	enum eeprom_cfg_type_t cfgtype;
 	uint8_t is_supported;
 	union {
-		char eeprom_name[MAX_EEPROM_NAME];
+		char eeprom_name[MAX_SENSOR_NAME];
 		struct eeprom_get_t get_data;
 		struct eeprom_read_t read_data;
 		struct eeprom_write_t write_data;
@@ -359,7 +359,7 @@ struct msm_eeprom_cfg_data32 {
 	enum eeprom_cfg_type_t cfgtype;
 	uint8_t is_supported;
 	union {
-		char eeprom_name[MAX_EEPROM_NAME];
+		char eeprom_name[MAX_SENSOR_NAME];
 		struct eeprom_get_t get_data;
 		struct eeprom_read_t32 read_data;
 		struct eeprom_write_t32 write_data;
@@ -464,8 +464,6 @@ struct msm_actuator_tuning_params_t {
 	uint16_t region_size;
 	uint32_t total_steps;
 	struct region_params_t *region_params;
-	enum actuator_initial_position_type initial_position_type; //0:normal bias entry  1:mid entry
-	int16_t start_code; //If there is af otp, it's infinity_dac, else it's 0.
 };
 
 struct park_lens_data_t {
@@ -549,6 +547,7 @@ struct msm_actuator_cfg_data {
 enum msm_camera_led_config_t {
 	MSM_CAMERA_LED_OFF,
 	MSM_CAMERA_LED_LOW,
+	MSM_CAMERA_LED_TORCH,
 	MSM_CAMERA_LED_HIGH,
 	MSM_CAMERA_LED_INIT,
 	MSM_CAMERA_LED_RELEASE,
@@ -647,8 +646,6 @@ struct msm_actuator_tuning_params_t32 {
 	uint16_t region_size;
 	uint32_t total_steps;
 	compat_uptr_t region_params;
-	enum actuator_initial_position_type initial_position_type; //0:normal bias entry  1:mid entry
-	int16_t start_code; //If there is af otp, it's infinity_dac, else it's 0.
 };
 
 struct msm_actuator_params_t32 {

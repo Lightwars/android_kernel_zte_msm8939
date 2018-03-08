@@ -37,8 +37,6 @@ config SND_SOC_GENERIC_DMAENGINE_PCM
 config ZTE_HEADSET_GPIO
     bool "zte add zte headset gpio detect"
 	
-config ZTE_OPEN_QCOM_I2S_QUARD
-   bool  "zte add QCOM_I2S_QUARD"
 	
 # All the supported SoCs
 source "sound/soc/atmel/Kconfig"

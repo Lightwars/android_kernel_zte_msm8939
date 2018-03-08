@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -42,7 +42,6 @@
 #include "q6voice.h"
 #include "sound/q6lsm.h"
 #include <sound/audio_cal_utils.h>
-#include "msm-dts-eagle.h"
 
 static int get_cal_path(int path_type);
 
@@ -142,11 +141,6 @@ static void msm_pcm_routing_cfg_pp(int port_id, int copp_idx, int topology,
 					__func__, topology, port_id, rc);
 		}
 		break;
-	case ADM_CMD_COPP_OPEN_TOPOLOGY_ID_DTS_HPX_0:
-	case ADM_CMD_COPP_OPEN_TOPOLOGY_ID_DTS_HPX_1:
-		pr_debug("%s: DTS_EAGLE_COPP_TOPOLOGY_ID\n", __func__);
-		msm_dts_eagle_init_post(port_id, copp_idx, topology);
-		break;
 	case ADM_CMD_COPP_OPEN_TOPOLOGY_ID_AUDIOSPHERE:
 		pr_debug("%s: TOPOLOGY_ID_AUDIOSPHERE\n", __func__);
 		msm_qti_pp_asphere_init(port_id, copp_idx);
@@ -177,11 +171,6 @@ static void msm_pcm_routing_deinit_pp(int port_id, int topology)
 			pr_debug("%s: DOLBY_ADM_COPP_TOPOLOGY_ID\n", __func__);
 			msm_dolby_dap_deinit(port_id);
 		}
-		break;
-	case ADM_CMD_COPP_OPEN_TOPOLOGY_ID_DTS_HPX_0:
-	case ADM_CMD_COPP_OPEN_TOPOLOGY_ID_DTS_HPX_1:
-		pr_debug("%s: DTS_EAGLE_COPP_TOPOLOGY_ID\n", __func__);
-		msm_dts_eagle_deinit_post(port_id, topology);
 		break;
 	case ADM_CMD_COPP_OPEN_TOPOLOGY_ID_AUDIOSPHERE:
 		pr_debug("%s: TOPOLOGY_ID_AUDIOSPHERE\n", __func__);
@@ -1749,7 +1738,13 @@ static int msm_routing_ec_ref_rx_put(struct snd_kcontrol *kcontrol,
 	int ec_ref_port_id;
 	struct snd_soc_dapm_widget_list *wlist = snd_kcontrol_chip(kcontrol);
 	struct snd_soc_dapm_widget *widget = wlist->widgets[0];
+	int mux = ucontrol->value.enumerated.item[0];
 	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
+
+	if (mux >= e->max) {
+		pr_err("%s: Invalid mux value %d\n", __func__, mux);
+		return -EINVAL;
+	}
 
 	mutex_lock(&routing_lock);
 	switch (ucontrol->value.integer.value[0]) {
@@ -1866,6 +1861,11 @@ static int msm_routing_ext_ec_put(struct snd_kcontrol *kcontrol,
 	pr_debug("%s: msm_route_ec_ref_rx = %d value = %ld\n",
 		 __func__, msm_route_ext_ec_ref,
 		 ucontrol->value.integer.value[0]);
+
+	if (mux >= e->max) {
+		pr_err("%s: Invalid mux value %d\n", __func__, mux);
+		return -EINVAL;
+	}
 
 	mutex_lock(&routing_lock);
 	switch (ucontrol->value.integer.value[0]) {
@@ -2914,11 +2914,6 @@ static const struct snd_kcontrol_new mmul5_mixer_controls[] = {
 	SOC_SINGLE_EXT("TERT_MI2S_TX", MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA5, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	SOC_SINGLE_EXT("QUAT_MI2S_TX", MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-	MSM_FRONTEND_DAI_MULTIMEDIA5, 1, 0, msm_routing_get_audio_mixer,
-	msm_routing_put_audio_mixer),
-#endif
 };
 
 static const struct snd_kcontrol_new mmul6_mixer_controls[] = {
@@ -2928,11 +2923,6 @@ static const struct snd_kcontrol_new mmul6_mixer_controls[] = {
 	SOC_SINGLE_EXT("SLIM_0_TX", MSM_BACKEND_DAI_SLIMBUS_0_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA6, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	SOC_SINGLE_EXT("QUAT_MI2S_TX", MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-	MSM_FRONTEND_DAI_MULTIMEDIA6, 1, 0, msm_routing_get_audio_mixer,
-	msm_routing_put_audio_mixer),
-#endif
 	SOC_SINGLE_EXT("TERT_MI2S_TX", MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA6, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
@@ -3449,11 +3439,6 @@ static const struct snd_kcontrol_new tx_voice_mixer_controls[] = {
 	SOC_SINGLE_EXT("TERT_MI2S_TX_Voice", MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
 	MSM_FRONTEND_DAI_CS_VOICE, 1, 0, msm_routing_get_voice_mixer,
 	msm_routing_put_voice_mixer),
-#if defined(CONFIG_AUDIO_CODEC_FLORIDA) || defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH) 
-	SOC_SINGLE_EXT("QUAT_MI2S_TX_Voice", MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-	MSM_FRONTEND_DAI_CS_VOICE, 1, 0, msm_routing_get_voice_mixer,
-	msm_routing_put_voice_mixer),
-#endif
 };
 
 static const struct snd_kcontrol_new tx_voice2_mixer_controls[] = {
@@ -3484,11 +3469,6 @@ static const struct snd_kcontrol_new tx_voice2_mixer_controls[] = {
 	SOC_SINGLE_EXT("TERT_MI2S_TX_Voice2", MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
 	MSM_FRONTEND_DAI_VOICE2, 1, 0, msm_routing_get_voice_mixer,
 	msm_routing_put_voice_mixer),
-#if defined(CONFIG_AUDIO_CODEC_FLORIDA) || defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	SOC_SINGLE_EXT("QUAT_MI2S_TX_Voice2", MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-	MSM_FRONTEND_DAI_VOICE2, 1, 0, msm_routing_get_voice_mixer,
-	msm_routing_put_voice_mixer),
-#endif
 };
 
 static const struct snd_kcontrol_new tx_volte_mixer_controls[] = {
@@ -3519,11 +3499,6 @@ static const struct snd_kcontrol_new tx_volte_mixer_controls[] = {
 	SOC_SINGLE_EXT("TERT_MI2S_TX_VoLTE", MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
 	MSM_FRONTEND_DAI_VOLTE, 1, 0, msm_routing_get_voice_mixer,
 	msm_routing_put_voice_mixer),
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	SOC_SINGLE_EXT("QUAT_MI2S_TX_VoLTE", MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-	MSM_FRONTEND_DAI_VOLTE, 1, 0, msm_routing_get_voice_mixer,
-	msm_routing_put_voice_mixer),
-#endif
 };
 
 static const struct snd_kcontrol_new tx_vowlan_mixer_controls[] = {
@@ -3554,11 +3529,6 @@ static const struct snd_kcontrol_new tx_vowlan_mixer_controls[] = {
 	SOC_SINGLE_EXT("TERT_MI2S_TX_VoWLAN", MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
 	MSM_FRONTEND_DAI_VOWLAN, 1, 0, msm_routing_get_voice_mixer,
 	msm_routing_put_voice_mixer),
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	SOC_SINGLE_EXT("QUAT_MI2S_TX_VoWLAN", MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-	MSM_FRONTEND_DAI_VOWLAN, 1, 0, msm_routing_get_voice_mixer,
-	msm_routing_put_voice_mixer),
-#endif
 };
 
 static const struct snd_kcontrol_new tx_voicemmode1_mixer_controls[] = {
@@ -3649,11 +3619,6 @@ static const struct snd_kcontrol_new tx_voip_mixer_controls[] = {
 	SOC_SINGLE_EXT("TERT_MI2S_TX_Voip", MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
 	MSM_FRONTEND_DAI_VOIP, 1, 0, msm_routing_get_voice_mixer,
 	msm_routing_put_voice_mixer),
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	SOC_SINGLE_EXT("QUAT_MI2S_TX_Voip", MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-	MSM_FRONTEND_DAI_VOIP, 1, 0, msm_routing_get_voice_mixer,
-	msm_routing_put_voice_mixer),
-#endif
 };
 
 static const struct snd_kcontrol_new tx_voice_stub_mixer_controls[] = {
@@ -3785,11 +3750,6 @@ static const struct snd_kcontrol_new tx_qchat_mixer_controls[] = {
 	SOC_SINGLE_EXT("TERT_MI2S_TX_QCHAT", MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
 	MSM_FRONTEND_DAI_QCHAT, 1, 0, msm_routing_get_voice_mixer,
 	msm_routing_put_voice_mixer),
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	SOC_SINGLE_EXT("QUAT_MI2S_TX_QCHAT", MSM_BACKEND_DAI_QUATERNARY_MI2S_TX,
-	MSM_FRONTEND_DAI_QCHAT, 1, 0, msm_routing_get_voice_mixer,
-	msm_routing_put_voice_mixer),
-#endif
 };
 
 static const struct snd_kcontrol_new sbus_0_rx_port_mixer_controls[] = {
@@ -4279,10 +4239,10 @@ static int msm_routing_put_stereo_to_custom_stereo_control(
 	int flag = 0, i = 0, rc = 0, idx = 0;
 	int be_index = 0, port_id, topo_id;
 	unsigned int session_id = 0;
-	uint16_t op_FL_ip_FL_weight = 0;
-	uint16_t op_FL_ip_FR_weight = 0;
-	uint16_t op_FR_ip_FL_weight = 0;
-	uint16_t op_FR_ip_FR_weight = 0;
+	uint16_t op_FL_ip_FL_weight;
+	uint16_t op_FL_ip_FR_weight;
+	uint16_t op_FR_ip_FL_weight;
+	uint16_t op_FR_ip_FR_weight;
 	flag = ucontrol->value.integer.value[0];
 	pr_debug("%s E flag %d\n", __func__, flag);
 
@@ -5225,12 +5185,9 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	SND_SOC_DAPM_SWITCH("HFP_INT_UL_HL", SND_SOC_NOPM, 0, 0,
 				&hfp_int_switch_mixer_controls),
 
-#if defined(CONFIG_AUDIO_CODEC_FLORIDA) || defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-
-#else
 	SND_SOC_DAPM_MUX("SLIM_0_RX AANC MUX", SND_SOC_NOPM, 0, 0,
 			aanc_slim_0_rx_mux),
-#endif
+
 	/* Mixer definitions */
 	SND_SOC_DAPM_MIXER("PRI_RX Audio Mixer", SND_SOC_NOPM, 0, 0,
 	pri_i2s_rx_mixer_controls, ARRAY_SIZE(pri_i2s_rx_mixer_controls)),
@@ -5683,10 +5640,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MultiMedia5 Mixer", "MI2S_TX", "MI2S_TX"},
 	{"MultiMedia1 Mixer", "QUAT_MI2S_TX", "QUAT_MI2S_TX"},
 	{"MultiMedia2 Mixer", "QUAT_MI2S_TX", "QUAT_MI2S_TX"},
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	{"MultiMedia5 Mixer", "QUAT_MI2S_TX", "QUAT_MI2S_TX"},
-	{"MultiMedia6 Mixer", "QUAT_MI2S_TX", "QUAT_MI2S_TX"},
-#endif
 	{"MultiMedia1 Mixer", "TERT_MI2S_TX", "TERT_MI2S_TX"},
 	{"MultiMedia1 Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"MultiMedia1 Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
@@ -6048,9 +6001,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"Voice_Tx Mixer", "PRI_MI2S_TX_Voice", "PRI_MI2S_TX"},
 	{"Voice_Tx Mixer", "MI2S_TX_Voice", "MI2S_TX"},
 	{"Voice_Tx Mixer", "TERT_MI2S_TX_Voice", "TERT_MI2S_TX"},
-#if defined(CONFIG_AUDIO_CODEC_FLORIDA) || defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	{"Voice_Tx Mixer", "QUAT_MI2S_TX_Voice", "QUAT_MI2S_TX"},
-#endif
 	{"Voice_Tx Mixer", "SLIM_0_TX_Voice", "SLIMBUS_0_TX"},
 	{"Voice_Tx Mixer", "INTERNAL_BT_SCO_TX_Voice", "INT_BT_SCO_TX"},
 	{"Voice_Tx Mixer", "AFE_PCM_TX_Voice", "PCM_TX"},
@@ -6062,9 +6012,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"Voice2_Tx Mixer", "PRI_MI2S_TX_Voice2", "PRI_MI2S_TX"},
 	{"Voice2_Tx Mixer", "MI2S_TX_Voice2", "MI2S_TX"},
 	{"Voice2_Tx Mixer", "TERT_MI2S_TX_Voice2", "TERT_MI2S_TX"},
-#if defined(CONFIG_AUDIO_CODEC_FLORIDA) || defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	{"Voice2_Tx Mixer", "QUAT_MI2S_TX_Voice2", "QUAT_MI2S_TX"},
-#endif
 	{"Voice2_Tx Mixer", "SLIM_0_TX_Voice2", "SLIMBUS_0_TX"},
 	{"Voice2_Tx Mixer", "INTERNAL_BT_SCO_TX_Voice2", "INT_BT_SCO_TX"},
 	{"Voice2_Tx Mixer", "AFE_PCM_TX_Voice2", "PCM_TX"},
@@ -6081,9 +6028,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"VoLTE_Tx Mixer", "MI2S_TX_VoLTE", "MI2S_TX"},
 	{"VoLTE_Tx Mixer", "PRI_MI2S_TX_VoLTE", "PRI_MI2S_TX"},
 	{"VoLTE_Tx Mixer", "TERT_MI2S_TX_VoLTE", "TERT_MI2S_TX"},
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	{"VoLTE_Tx Mixer", "QUAT_MI2S_TX_VoLTE", "QUAT_MI2S_TX"},
-#endif
 	{"VoLTE_UL", NULL, "VoLTE_Tx Mixer"},
 
 	{"VoWLAN_Tx Mixer", "PRI_TX_VoWLAN", "PRI_I2S_TX"},
@@ -6095,9 +6039,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"VoWLAN_Tx Mixer", "MI2S_TX_VoWLAN", "MI2S_TX"},
 	{"VoWLAN_Tx Mixer", "PRI_MI2S_TX_VoWLAN", "PRI_MI2S_TX"},
 	{"VoWLAN_Tx Mixer", "TERT_MI2S_TX_VoWLAN", "TERT_MI2S_TX"},
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	{"VoWLAN_Tx Mixer", "QUAT_MI2S_TX_VoWLAN", "QUAT_MI2S_TX"},
-#endif
 	{"VoWLAN_UL", NULL, "VoWLAN_Tx Mixer"},
 
 	{"VoiceMMode1_Tx Mixer", "PRI_TX_MMode1", "PRI_I2S_TX"},
@@ -6125,9 +6066,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"Voip_Tx Mixer", "PRI_TX_Voip", "PRI_I2S_TX"},
 	{"Voip_Tx Mixer", "MI2S_TX_Voip", "MI2S_TX"},
 	{"Voip_Tx Mixer", "TERT_MI2S_TX_Voip", "TERT_MI2S_TX"},
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	{"Voip_Tx Mixer", "QUAT_MI2S_TX_Voip", "QUAT_MI2S_TX"},
-#endif
 	{"Voip_Tx Mixer", "SLIM_0_TX_Voip", "SLIMBUS_0_TX"},
 	{"Voip_Tx Mixer", "INTERNAL_BT_SCO_TX_Voip", "INT_BT_SCO_TX"},
 	{"Voip_Tx Mixer", "AFE_PCM_TX_Voip", "PCM_TX"},
@@ -6230,9 +6168,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"QCHAT_Tx Mixer", "MI2S_TX_QCHAT", "MI2S_TX"},
 	{"QCHAT_Tx Mixer", "PRI_MI2S_TX_QCHAT", "PRI_MI2S_TX"},
 	{"QCHAT_Tx Mixer", "TERT_MI2S_TX_QCHAT", "TERT_MI2S_TX"},
-#if defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-	{"QCHAT_Tx Mixer", "QUAT_MI2S_TX_QCHAT", "QUAT_MI2S_TX"},
-#endif
 	{"QCHAT_UL", NULL, "QCHAT_Tx Mixer"},
 
 	{"INT_FM_RX", NULL, "INTFM_DL_HL"},
@@ -6258,10 +6193,6 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"PRI_MI2S_UL_HL", NULL, "PRI_MI2S_TX"},
 	{"SEC_MI2S_RX", NULL, "SEC_MI2S_DL_HL"},
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_DL_HL"},
-#if 1	//Import FM patch.
-	{"QUAT_MI2S_RX_DL_HL", "Switch", "QUAT_MI2S_DL_HL"},
-	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_DL_HL"},
-#endif
 	{"QUAT_MI2S_UL_HL", NULL, "QUAT_MI2S_TX"},
 
 	{"SLIMBUS_0_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
@@ -6334,11 +6265,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"SLIMBUS_1_RX Mixer", "VoLTE Stub", "VOLTE_STUB_DL"},
 	{"SLIMBUS_1_RX", NULL, "SLIMBUS_1_RX Mixer"},
 	{"INTERNAL_BT_SCO_RX_Voice Mixer", "Voice Stub", "VOICE_STUB_DL"},
-#if defined(CONFIG_AUDIO_CODEC_FLORIDA) || defined(CONFIG_AUDIO_CODEC_WM8998_SWITCH)
-// None.	xuke @ 20141212	For CODEC WM8998.
-#else
 	{"INTERNAL_BT_SCO_RX_Voice Mixer", "Voice2 Stub", "VOICE2_STUB_DL"},
-#endif
 	{"AFE_PCM_RX_Voice Mixer", "Voice Stub", "VOICE_STUB_DL"},
 	{"AFE_PCM_RX_Voice Mixer", "Voice2 Stub", "VOICE2_STUB_DL"},
 	{"AFE_PCM_RX_Voice Mixer", "VoLTE Stub", "VOLTE_STUB_DL"},

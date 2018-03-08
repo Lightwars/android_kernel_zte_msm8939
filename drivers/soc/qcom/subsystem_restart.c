@@ -306,10 +306,11 @@ static struct device_attribute subsys_attrs[] = {
 	__ATTR_NULL,
 };
 
-static struct bus_type subsys_bus_type = {
+struct bus_type subsys_bus_type = {
 	.name		= "msm_subsys",
 	.dev_attrs	= subsys_attrs,
 };
+EXPORT_SYMBOL(subsys_bus_type);
 
 static DEFINE_IDA(subsys_ida);
 

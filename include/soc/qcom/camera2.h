@@ -21,34 +21,6 @@
 #include <linux/of.h>
 #define MAX_SPECIAL_SUPPORT_SIZE 10
 
-/*For camera vendor id*/  
-enum __camera_vendor_module_id{
-	MID_NULL = 0,
-	MID_SUNNY,
-	MID_TRULY,
-	MID_A_KERR,
-	MID_LITEARRAY,
-	MID_DARLING,
-	MID_QTECH,
-	MID_OFILM,
-	MID_HUAQUAN,
-	MID_KINGCOM = MID_HUAQUAN,
-	MID_BOOYI,
-	MID_LAIMU,
-	MID_WDSEN,
-	MID_SUNRISE,
-	MID_PRIMAX = 0x17,
-	MID_MAX
-};
-typedef enum __camera_vendor_module_id camera_vendor_module_id;
-
-struct vendor_eeprom{
-	char eeprom_name[128];
-	uint8_t module_id;
-};
-#define CAMERA_VENDOR_EEPROM_COUNT_MAX		6
-
-
 enum msm_camera_device_type_t {
 	MSM_CAMERA_I2C_DEVICE,
 	MSM_CAMERA_PLATFORM_DEVICE,
@@ -241,25 +213,23 @@ struct msm_eeprom_cmm_t {
 	uint32_t cmm_offset;
 	uint32_t cmm_size;
 };
-//zoupeng add imx214 otp start
-struct eeprom_memory_map_t 
-{	
-    struct eeprom_map_t page;	
-    struct eeprom_map_t pageen;	
-    struct eeprom_map_t poll;	
-    struct eeprom_map_t mem;
+
+struct eeprom_memory_map_t
+{	   
+      struct eeprom_map_t page;	    
+      struct eeprom_map_t pageen;	    
+      struct eeprom_map_t poll;	    
+      struct eeprom_map_t mem;
 };
-//zoupeng add imx 214 otp end
+
 struct msm_eeprom_board_info {
 	const char *eeprom_name;
 	uint16_t i2c_slaveaddr;
 	struct msm_camera_power_ctrl_t power_info;
 	struct msm_eeprom_cmm_t cmm_data;
 	enum i2c_freq_mode_t i2c_freq_mode;
-	//zoupeng add imx214 otp start
 	uint32_t   num_blocks;
 	struct eeprom_memory_map_t *eeprom_map;
-	//zoupeng add imx 214 otp end
 };
 
 #endif
