@@ -230,9 +230,6 @@ static const char fsg_string_interface[] = "Mass Storage";
 
 #include "storage_common.c"
 
-/* SCSI commands that we recognize */
-#define SC_READ_CD			0xbe
-
 #ifdef CONFIG_USB_CSW_HACK
 static int write_error_after_csw_sent;
 static int must_report_residue;
@@ -318,10 +315,6 @@ struct fsg_common {
 	char inquiry_string[8 + 16 + 4 + 1];
 
 	struct kref		ref;
-
-#ifdef CONFIG_ONLY_BICR_SUPPORT
-	int  bicr;
-#endif
 };
 
 struct fsg_config {
@@ -398,9 +391,6 @@ static void set_bulk_out_req_length(struct fsg_common *common,
 	if (rem > 0)
 		length += common->bulk_out_maxpacket - rem;
 	bh->outreq->length = length;
-#ifdef CONFIG_ONLY_BICR_SUPPORT
-	bh->outreq->short_not_ok = 1;
-#endif
 }
 
 
@@ -564,19 +554,8 @@ static int fsg_setup(struct usb_function *f,
 				w_length != 1)
 			return -EDOM;
 		VDBG(fsg, "get max LUN\n");
-
-#ifdef CONFIG_ONLY_BICR_SUPPORT
-		if(fsg->common->bicr) {
-			/*When enable bicr, only share ONE LUN.*/
-			*(u8 *)req->buf = 0;
-		} else {
-			*(u8 *)req->buf = fsg->common->nluns - 1;
-		}
-#else
 		*(u8 *)req->buf = fsg->common->nluns - 1;
-#endif
 
-		INFO(fsg, "get max LUN = %d\n",*(u8 *)req->buf);
 		/* Respond with data/status */
 		req->length = min((u16)1, w_length);
 		return ep0_queue(fsg->common);
@@ -1213,7 +1192,6 @@ static int do_inquiry(struct fsg_common *common, struct fsg_buffhd *bh)
 {
 	struct fsg_lun *curlun = common->curlun;
 	u8	*buf = (u8 *) bh->buf;
-	char disk_inquiry_string[8 + 16 + 4 + 1];
 
 	if (!curlun) {		/* Unsupported LUNs are okay */
 		common->bad_lun_okay = 1;
@@ -1231,21 +1209,7 @@ static int do_inquiry(struct fsg_common *common, struct fsg_buffhd *bh)
 	buf[5] = 0;		/* No special options */
 	buf[6] = 0;
 	buf[7] = 0;
-#if 0
-	if(buf[0] == TYPE_ROM) {
-		snprintf(disk_inquiry_string, sizeof disk_inquiry_string,
-		 "%-8s%-16s%4s", "Lenovo", "CDROM", "2.31");
-		memcpy(buf + 8, disk_inquiry_string, sizeof(disk_inquiry_string));}
-	else
-        memcpy(buf + 8, common->inquiry_string, sizeof common->inquiry_string);
-#else
-	if(buf[0] == TYPE_ROM) {
-		snprintf(disk_inquiry_string, sizeof disk_inquiry_string,
-		 "%-8s%-16s%4s", "Linux", "CDROM", "2.31");
-		memcpy(buf + 8, disk_inquiry_string, sizeof(disk_inquiry_string));}
-	else
-		memcpy(buf + 8, common->inquiry_string, sizeof common->inquiry_string);
-#endif
+	memcpy(buf + 8, common->inquiry_string, sizeof common->inquiry_string);
 	return 36;
 }
 
@@ -1343,38 +1307,6 @@ static int do_read_header(struct fsg_common *common, struct fsg_buffhd *bh)
 	return 8;
 }
 
-static  u8 ms_read_cd_data[]=
-{
-	0x00, 0x12, 0x01, 0x01, 0x00, 0x14, 0x01, 0x00, 
-	0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00
-};
-
-static int do_read_cd(struct fsg_common *common, struct fsg_buffhd *bh)
-{
-	u8 *buf = (u8 *)bh->buf;
-	memset(buf, 0, sizeof(ms_read_cd_data));
-	memcpy(buf, ms_read_cd_data,sizeof(ms_read_cd_data));
-  	return sizeof(ms_read_cd_data);
-}
-
-static u8 ms_toc_data0[]=
-{
-	0x00, 0x12, 0x01, 0x01, 0x00, 0x14, 0x01, 0x00, 
-	0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00
-};
-
-static u8 ms_toc_data2[]=
-{
-	0x00, 0x2e, 0x01, 0x01, 0x01, 0x14, 0x00, 0xa0, 
-	0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 
-	0x14, 0x00, 0xa1, 0x00, 0x00, 0x00, 0x00, 0x01, 
-	0x00, 0x00, 0x01, 0x14, 0x00, 0xa2, 0x00, 0x00,
-	0x00, 0x00, 0x72, 0x16, 0x26, 0x01, 0x14, 0x00, 
-	0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00
-};
-
 static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 {
 	struct fsg_lun	*curlun = common->curlun;
@@ -1387,7 +1319,7 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 		curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
 		return -EINVAL;
 	}
-#if 0
+
 	memset(buf, 0, 20);
 	buf[1] = (20-2);		/* TOC data length */
 	buf[2] = 1;			/* First track number */
@@ -1400,16 +1332,6 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 	buf[14] = 0xAA;			/* Lead-out track number */
 	store_cdrom_address(&buf[16], msf, curlun->num_sectors);
 	return 20;
-#else
-	if(msf){
-			memset(buf,0,sizeof(ms_toc_data2));
-		  memcpy(buf,ms_toc_data2,sizeof(ms_toc_data2));
-	}else{
-			memset(buf,0,sizeof(ms_toc_data0));
-		  memcpy(buf,ms_toc_data0,sizeof(ms_toc_data0));
-	}
-	return (buf[1]+2);
-#endif
 }
 
 static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
@@ -2052,11 +1974,6 @@ static int do_scsi_command(struct fsg_common *common)
 	down_read(&common->filesem);	/* We're using the backing file */
 	switch (common->cmnd[0]) {
 
-	case SC_READ_CD:
-		//common->residue = common->data_size_from_cmnd = common->data_size;
-		reply = do_read_cd(common,bh);
-		break;
-		
 	case INQUIRY:
 		common->data_size_from_cmnd = common->cmnd[4];
 		reply = check_command(common, 6, DATA_DIR_TO_HOST,
@@ -2832,6 +2749,7 @@ static int fsg_main_thread(void *common_)
 static DEVICE_ATTR(ro, 0644, fsg_show_ro, fsg_store_ro);
 static DEVICE_ATTR(nofua, 0644, fsg_show_nofua, fsg_store_nofua);
 static DEVICE_ATTR(file, 0644, fsg_show_file, fsg_store_file);
+static DEVICE_ATTR(cdrom, 0644, fsg_show_cdrom, fsg_store_cdrom);
 
 static struct device_attribute dev_attr_ro_cdrom =
 	__ATTR(ro, 0444, fsg_show_ro, NULL);
@@ -2920,6 +2838,10 @@ static int create_lun_device(struct fsg_common *common,
 		if (rc)
 			goto error_luns;
 
+		rc = device_create_file(&curlun->dev, &dev_attr_cdrom);
+		if (rc)
+			goto error_luns;
+
 #ifdef CONFIG_USB_MSC_PROFILING
 		rc = device_create_file(&curlun->dev, &dev_attr_perf);
 		if (rc)
@@ -2997,9 +2919,6 @@ static struct fsg_common *fsg_common_init(struct fsg_common *common,
 	common->ep0 = gadget->ep0;
 	common->ep0req = cdev->req;
 	common->cdev = cdev;
-#ifdef CONFIG_ONLY_BICR_SUPPORT
-	common->bicr = 0;
-#endif
 
 	/*
 	 * Create the LUNs, open their backing files, and register the
@@ -3035,7 +2954,6 @@ buffhds_first_it:
 
 	/* Prepare inquiryString */
 	i = get_default_bcdDevice();
-#if 0
 	snprintf(common->inquiry_string, sizeof common->inquiry_string,
 		 "%-8s%-16s%04x", cfg->vendor_name ?: "Linux",
 		 /* Assume product name dependent on the first LUN */
@@ -3043,16 +2961,6 @@ buffhds_first_it:
 				     ? "File-Stor Gadget"
 				     : "File-CD Gadget"),
 		 i);
-#else
-	snprintf(common->inquiry_string, sizeof common->inquiry_string,
-		 "%-8s%-16s%4s", cfg->vendor_name ?: "Linux",
-		 /* Assume product name dependent on the first LUN */
-		 cfg->product_name ?: (!common->luns->cdrom
-				     ? "CDROM"
-				     : "Mass Storage"),
-		 "2.31");
-
-#endif
 
 	/*
 	 * Some peripheral controllers are known not to be able to
@@ -3134,6 +3042,7 @@ static void fsg_common_release(struct kref *ref)
 #ifdef CONFIG_USB_MSC_PROFILING
 			device_remove_file(&lun->dev, &dev_attr_perf);
 #endif
+			device_remove_file(&lun->dev, &dev_attr_cdrom);
 			device_remove_file(&lun->dev, &dev_attr_nofua);
 			device_remove_file(&lun->dev,
 					   lun->cdrom

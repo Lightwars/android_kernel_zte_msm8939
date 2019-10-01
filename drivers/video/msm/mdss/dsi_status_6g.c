@@ -134,13 +134,6 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 		return;
 	}
 
-	if (ctl->power_state == MDSS_PANEL_POWER_OFF) {
-		schedule_delayed_work(&pstatus_data->check_status,
-			msecs_to_jiffies(interval));
-		pr_debug("%s: ctl not powered on\n", __func__);
-		return;
-	}
-
 	if (ctrl_pdata->status_mode == ESD_TE) {
 		mdss_check_te_status(ctrl_pdata, pstatus_data, interval);
 		return;

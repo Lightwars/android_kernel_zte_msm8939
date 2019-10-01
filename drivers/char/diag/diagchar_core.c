@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -322,8 +322,8 @@ static int diagchar_open(struct inode *inode, struct file *file)
 	return -ENOMEM;
 
 fail:
-	mutex_unlock(&driver->diagchar_mutex);
 	driver->num_clients--;
+	mutex_unlock(&driver->diagchar_mutex);
 	pr_alert("diag: Insufficient memory for new client");
 	return -ENOMEM;
 }
@@ -1063,14 +1063,18 @@ static int diag_ioctl_lsm_deinit(void)
 {
 	int i;
 
+	mutex_lock(&driver->diagchar_mutex);
 	for (i = 0; i < driver->num_clients; i++)
 		if (driver->client_map[i].pid == current->tgid)
 			break;
 
-	if (i == driver->num_clients)
+	if (i == driver->num_clients) {
+		mutex_unlock(&driver->diagchar_mutex);
 		return -EINVAL;
+	}
 
 	driver->data_ready[i] |= DEINIT_TYPE;
+	mutex_unlock(&driver->diagchar_mutex);
 	wake_up_interruptible(&driver->wait_q);
 
 	return 1;
@@ -1379,7 +1383,9 @@ long diagchar_ioctl(struct file *filp,
 		result = diag_ioctl_dci_log_status(ioarg);
 		break;
 	case DIAG_IOCTL_DCI_EVENT_STATUS:
+		mutex_lock(&driver->dci_mutex);
 		result = diag_ioctl_dci_event_status(ioarg);
+		mutex_unlock(&driver->dci_mutex);
 		break;
 	case DIAG_IOCTL_DCI_CLEAR_LOGS:
 		if (copy_from_user((void *)&client_id, (void __user *)ioarg,
@@ -1652,10 +1658,7 @@ static ssize_t diagchar_write(struct file *file, const char __user *buf,
 		&& (driver->logging_mode == USB_MODE) &&
 		(!driver->usb_connected))) {
 		/*Drop the diag payload */
-		/* if it's write nv cmd, just pass it */
-		if (pkt_type != CALLBACK_DATA_TYPE) {
 		return -EIO;
-		}
 	}
 #endif /* DIAG over USB */
 	if (pkt_type == DCI_DATA_TYPE) {

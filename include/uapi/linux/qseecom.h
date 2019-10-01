@@ -295,4 +295,6 @@ extern long qseecom_ioctl(struct file *file,
 #define QSEECOM_QTEEC_IOCTL_INVOKE_MODFD_CMD_REQ \
 	_IOWR(QSEECOM_IOC_MAGIC, 32, struct qseecom_qteec_req)
 
+#define QSEECOM_IOCTL_GET_QSEE_VERSION_REQ \
+	_IOWR(QSEECOM_IOC_MAGIC, 37, struct qseecom_qsee_version_req)
 #endif /* _UAPI_QSEECOM_H_ */

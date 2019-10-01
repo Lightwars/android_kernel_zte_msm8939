@@ -117,6 +117,7 @@ efi_head:
 	add	x13, x18, #0x16
 	b	stext
 #else
+arm64_head:
 	b	stext				// branch to kernel start, magic
 	.long	0				// reserved
 #endif
@@ -124,7 +125,12 @@ efi_head:
 	.quad	0				// reserved
 	.quad	0				// reserved
 	.quad	0				// reserved
+#ifndef CONFIG_EFI
+	.word	0				// reserved
+	.word	__bss_start - arm64_head	// Image size
+#else
 	.quad	0				// reserved
+#endif
 	.quad	0				// reserved
 	.byte	0x41				// Magic number, "ARM\x64"
 	.byte	0x52
@@ -538,6 +544,11 @@ CPU_LE(	movk	x0, #0x30d0, lsl #16	)	// Clear EE and E0E on LE systems
 #ifdef CONFIG_COMPAT
 	msr	hstr_el2, xzr			// Disable CP15 traps to EL2
 #endif
+
+	/* EL2 debug */
+	mrs	x0, pmcr_el0			// Disable debug access traps
+	ubfx	x0, x0, #11, #5			// to EL2 and allow access to
+	msr	mdcr_el2, x0			// all PMU counters from EL1
 
 	/* Stage-2 translation */
 	msr	vttbr_el2, xzr

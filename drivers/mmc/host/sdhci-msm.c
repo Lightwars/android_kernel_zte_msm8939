@@ -323,6 +323,9 @@ struct sdhci_msm_pltfm_data {
 	int mpm_sdiowakeup_int;
 	int sdiowakeup_irq;
 	enum pm_qos_req_type cpu_affinity_type;
+#ifdef CONFIG_MACH_OPPO
+	int sd_vdd_en;
+#endif
 	cpumask_t cpu_affinity_mask;
 };
 
@@ -1719,10 +1722,22 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev,
 		goto out;
 	}
 
+#ifdef CONFIG_MACH_OPPO
+	pdata->sd_vdd_en = of_get_named_gpio_flags(np, "vdd-gpio-en", 0,
+			&flags);
+#endif
+
 	if (sdhci_msm_dt_parse_vreg_info(dev, &pdata->vreg_data->vdd_data,
 					 "vdd")) {
+#ifndef CONFIG_MACH_OPPO
 		dev_err(dev, "failed parsing vdd data\n");
 		goto out;
+#else
+		if (!gpio_is_valid(pdata->sd_vdd_en)) {
+			dev_err(dev, "failed parsing vdd gpio\n");
+			goto out;
+		}
+#endif
 	}
 	if (sdhci_msm_dt_parse_vreg_info(dev,
 					 &pdata->vreg_data->vdd_io_data,
@@ -2165,6 +2180,16 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 		goto out;
 	}
 
+#ifdef CONFIG_MACH_OPPO
+	if (gpio_is_valid(pdata->sd_vdd_en)) {
+		if (!enable) {
+			gpio_direction_output(pdata->sd_vdd_en, 0);
+			gpio_set_value(pdata->sd_vdd_en, 0);
+			mdelay(2);
+		}
+	}
+#endif
+
 	vreg_table[0] = curr_slot->vdd_data;
 	vreg_table[1] = curr_slot->vdd_io_data;
 
@@ -2178,6 +2203,16 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 				goto out;
 		}
 	}
+
+#ifdef CONFIG_MACH_OPPO
+	if (gpio_is_valid(pdata->sd_vdd_en)) {
+		mdelay(2);
+		if (enable) {
+			gpio_direction_output(pdata->sd_vdd_en, 1);
+			gpio_set_value(pdata->sd_vdd_en, 1);
+		}
+	}
+#endif
 out:
 	return ret;
 }
@@ -2332,24 +2367,12 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 	struct sdhci_host *host = (struct sdhci_host *)data;
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = pltfm_host->priv;
-	struct sdhci_msm_pltfm_data *pdata = msm_host->pdata;
-	struct sdhci_msm_slot_reg_data *curr_slot;
-	struct sdhci_msm_reg_data *curr_vdd_reg;
 	u8 irq_status = 0;
 	u8 irq_ack = 0;
 	int ret = 0;
 	int pwr_state = 0, io_level = 0;
 	unsigned long flags;
 	int retry = 10;
-
-	curr_slot = pdata->vreg_data;
-	curr_vdd_reg = curr_slot->vdd_data;
-
-	if((msm_host->mmc->card) && (msm_host->mmc->card->cid.manfid == CID_MANFID_HYNIX) 
-		&& (msm_host->mmc->card->ext_csd.rev == 7) && (curr_vdd_reg->is_always_on == 0)) {
-		pr_debug("sdhci_msm_pwr_irq with card->cid.manfid is %x and card->ext_csd.rev is %d \n", msm_host->mmc->card->cid.manfid, msm_host->mmc->card->ext_csd.rev);
-		curr_vdd_reg->is_always_on = true;
-	}
 
 	irq_status = readb_relaxed(msm_host->core_mem + CORE_PWRCTL_STATUS);
 	pr_debug("%s: Received IRQ(%d), status=0x%x\n",
@@ -3414,6 +3437,23 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 				  sdhci_msm_bus_work);
 	sdhci_msm_bus_voting(host, 1);
 
+#ifdef CONFIG_MACH_OPPO
+	if (gpio_is_valid(msm_host->pdata->sd_vdd_en)) {
+		ret = gpio_request(msm_host->pdata->sd_vdd_en,
+				"sdcard_vdd_enable");
+		if (ret)
+			dev_err(&pdev->dev,
+				"%s: Failed to request sdcard vdd gpio ret=%d\n",
+				__func__, ret);
+
+		ret = gpio_direction_output(msm_host->pdata->sd_vdd_en, 0);
+		if (ret)
+			dev_err(&pdev->dev,
+				"%s: Failed to set sdcard vdd gpio ret=%d\n",
+				__func__, ret);
+	}
+#endif
+
 	/* Setup regulators */
 	ret = sdhci_msm_vreg_init(&pdev->dev, msm_host->pdata, true);
 	if (ret) {
@@ -3564,7 +3604,7 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR_CONTROL;
 	msm_host->mmc->caps2 |= (MMC_CAP2_BOOTPART_NOACC |
 				MMC_CAP2_DETECT_ON_ERR);
-	//msm_host->mmc->caps2 |= MMC_CAP2_CACHE_CTRL;
+	msm_host->mmc->caps2 |= MMC_CAP2_CACHE_CTRL;
 	msm_host->mmc->caps2 |= MMC_CAP2_POWEROFF_NOTIFY;
 	msm_host->mmc->caps2 |= MMC_CAP2_CLK_SCALE;
 	msm_host->mmc->caps2 |= MMC_CAP2_STOP_REQUEST;
@@ -3761,6 +3801,10 @@ static int sdhci_msm_remove(struct platform_device *pdev)
 		sdhci_msm_bus_cancel_work_and_set_vote(host, 0);
 		sdhci_msm_bus_unregister(msm_host);
 	}
+#ifdef CONFIG_MACH_OPPO
+	if (gpio_is_valid(msm_host->pdata->sd_vdd_en))
+		gpio_free(msm_host->pdata->sd_vdd_en);
+#endif
 	return 0;
 }
 

@@ -12815,7 +12815,7 @@ int hdd_wlan_startup(struct device *dev )
       }
    }
 
-#ifdef CONFIG_PRODUCT_VEGETALTE
+#ifdef CONFIG_P839F30_COMMON
    else if (
         (VOS_STATUS_SUCCESS != hdd_update_config_from_nv(pHddCtx)) &&
         (VOS_STATUS_SUCCESS != hdd_update_wifi_mac(pHddCtx))

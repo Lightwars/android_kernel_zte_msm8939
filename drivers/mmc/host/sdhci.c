@@ -166,6 +166,8 @@ static void sdhci_dumpregs(struct sdhci_host *host)
 		       readl(host->ioaddr + SDHCI_ADMA_ADDRESS_LOW));
 	}
 
+	host->mmc->err_occurred = true;
+
 	if (host->ops->dump_vendor_regs)
 		host->ops->dump_vendor_regs(host);
 	sdhci_dump_state(host);
@@ -828,14 +830,9 @@ static u8 sdhci_calc_timeout(struct sdhci_host *host, struct mmc_command *cmd)
 	if (!data)
 		target_timeout = cmd->cmd_timeout_ms * 1000;
 	else {
-		if (!data->timeout_ns && (host->quirks2 & SDHCI_QUIRK2_USE_RESERVED_MAX_TIMEOUT) &&
-				(host->clock > 400000)) {
-			return 0xE;
-		} else {
-			target_timeout = data->timeout_ns / 1000;
-			if (host->clock)
-				target_timeout += data->timeout_clks / host->clock;
-		}
+		target_timeout = data->timeout_ns / 1000;
+		if (host->clock)
+			target_timeout += data->timeout_clks / host->clock;
 	}
 
 	/*
@@ -1442,7 +1439,9 @@ clock_set:
 			goto ret;
 		}
 		timeout--;
+		spin_unlock_irq(&host->lock);
 		udelay(1);
+		spin_lock_irq(&host->lock);
 	}
 
 	clk |= SDHCI_CLOCK_CARD_EN;
