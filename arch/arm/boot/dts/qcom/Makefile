@@ -86,7 +86,7 @@ dtb-$(CONFIG_ARCH_MSM8909) += msm8909-sim.dtb \
 # dtb-$(CONFIG_ARCH_MSM8916) +=  vegetalte-msm8916-qrd-skui.dtb
 # else ifeq ($(CONFIG_P839F30_COMMON),y)
 dtb-$(CONFIG_ARCH_MSM8916) +=  p839f30-msm8939-mtp.dtb \
-	p839f30-eu-msm8939-mtp.dtb
+	p839f30-msm8929-mtp.dtb
 # else
 # dtb-$(CONFIG_ARCH_MSM8916) += msm8916-cdp.dtb \
 # 	msm8916-cdp-smb1360.dtb \
