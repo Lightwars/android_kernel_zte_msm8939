@@ -21,7 +21,6 @@
 #include <linux/kernel_stat.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/err.h>
 
 /*
  * The polling frequency depends on the capability of the processor. Default
@@ -136,13 +135,12 @@ struct cpu_dbs_common_info {
 	u64 prev_cpu_idle;
 	u64 prev_cpu_wall;
 	u64 prev_cpu_nice;
-	/*
-	 * Used to keep track of load in the previous interval. However, when
-	 * explicitly set to zero, it is used as a flag to ensure that we copy
-	 * the previous load to the current interval only once, upon the first
-	 * wake-up from idle.
-	 */
 	unsigned int prev_load;
+	/*
+	 * Flag to ensure that we copy the previous load only once, upon the
+	 * first wake-up from idle.
+	 */
+	bool copy_prev_load;
 	struct cpufreq_policy *cur_policy;
 	struct delayed_work work;
 	/*
@@ -195,11 +193,9 @@ struct cs_dbs_tuners {
 	unsigned int down_threshold;
 	unsigned int down_threshold_suspended;
 	unsigned int freq_step;
-	unsigned int touch_load_duration;
 	unsigned int sleep_depth;
 	unsigned int boost_enabled;
 	unsigned int boost_count;
-	unsigned int boost_ceiling;
 };
 
 struct ex_dbs_tuners {
@@ -233,7 +229,7 @@ struct common_dbs_data {
 	void *(*get_cpu_dbs_info_s)(int cpu);
 	void (*gov_dbs_timer)(struct work_struct *work);
 	void (*gov_check_cpu)(int cpu, unsigned int load);
-	int (*init)(struct dbs_data *dbs_data, struct cpufreq_policy *policy);
+	int (*init)(struct dbs_data *dbs_data);
 	int (*init_ex)(struct dbs_data *dbs_data, struct cpufreq_policy *policy);
 	void (*exit)(struct dbs_data *dbs_data);
 

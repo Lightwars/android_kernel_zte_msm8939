@@ -1464,7 +1464,7 @@ static void mbim_suspend(struct usb_function *f)
 		if (mbim->bam_port.out->desc)
 			mbim->out_ep_desc_backup = mbim->bam_port.out->desc;
 
-		pr_debug("in_ep_desc_backup = %p, out_ep_desc_backup = %p",
+		pr_debug("in_ep_desc_backup = %pK, out_ep_desc_backup = %pK",
 			mbim->in_ep_desc_backup, mbim->out_ep_desc_backup);
 
 		mbim_bam_disconnect(mbim);
@@ -1504,7 +1504,7 @@ static void mbim_resume(struct usb_function *f)
 		mbim->bam_port.in->desc  = mbim->in_ep_desc_backup;
 		mbim->bam_port.out->desc = mbim->out_ep_desc_backup;
 
-		pr_debug("in_ep_desc_backup = %p, out_ep_desc_backup = %p",
+		pr_debug("in_ep_desc_backup = %pK, out_ep_desc_backup = %pK",
 			mbim->in_ep_desc_backup, mbim->out_ep_desc_backup);
 
 		mbim_bam_connect(mbim);

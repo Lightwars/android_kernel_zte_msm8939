@@ -3752,6 +3752,7 @@ static long perf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return ret;
 }
 
+
 #ifdef CONFIG_COMPAT
 static long perf_compat_ioctl(struct file *file, unsigned int cmd,
 				unsigned long arg)

@@ -339,6 +339,17 @@ void cpufreq_notify_transition(struct cpufreq_policy *policy,
 }
 EXPORT_SYMBOL_GPL(cpufreq_notify_transition);
 
+/**
+cpufreq_notify_utilization - notify CPU userspace about CPU utilization change
+This function is called everytime the CPU load is evaluated by the ondemand governor. 
+It notifies userspace of cpu load changes via sysfs.
+*/
+void cpufreq_notify_utilization(struct cpufreq_policy *policy,
+ unsigned int util)
+{
+ if (policy)
+ policy->util = util;
+}
 
 /*********************************************************************
  *                          SYSFS INTERFACE                          *
@@ -438,6 +449,10 @@ static ssize_t store_##file_name					\
 {									\
 	int ret;							\
 	struct cpufreq_policy new_policy;				\
+	int mpd = strcmp(current->comm, "mpdecision");			\
+									\
+	if (mpd == 0)							\
+		return ret;						\
 									\
 	ret = cpufreq_get_policy(&new_policy, policy->cpu);		\
 	if (ret)							\
@@ -1415,6 +1430,20 @@ static void cpufreq_out_of_sync(unsigned int cpu, unsigned int old_freq,
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
 }
 
+unsigned int cpufreq_quick_get_util(unsigned int cpu)
+{
+ struct cpufreq_policy *policy = cpufreq_cpu_get(cpu);
+ unsigned int ret_util = 0;
+
+ if (policy) {
+ ret_util = policy->util;
+ cpufreq_cpu_put(policy);
+ }
+
+ return ret_util;
+}
+EXPORT_SYMBOL(cpufreq_quick_get_util);
+
 /**
  * cpufreq_quick_get - get the CPU frequency (in kHz) from policy->cur
  * @cpu: CPU number
@@ -1815,6 +1844,24 @@ int cpufreq_driver_target(struct cpufreq_policy *policy,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(cpufreq_driver_target);
+
+int __cpufreq_driver_getavg(struct cpufreq_policy *policy, unsigned int cpu)
+{
+    int ret = 0;
+    
+    if (!(cpu_online(cpu) && cpufreq_driver->getavg))
+		return 0;
+    
+    policy = cpufreq_cpu_get(policy->cpu);
+    if (!policy)
+    return -EINVAL;
+    
+    ret = cpufreq_driver->getavg(policy, cpu);
+    
+    cpufreq_cpu_put(policy);
+    return ret;
+}
+EXPORT_SYMBOL_GPL(__cpufreq_driver_getavg);
 
 /*
  * when "event" is CPUFREQ_GOV_LIMITS

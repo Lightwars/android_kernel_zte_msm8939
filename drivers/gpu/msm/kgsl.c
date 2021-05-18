@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -275,7 +275,7 @@ kgsl_mem_entry_destroy(struct kref *kref)
 		for_each_sg(entry->memdesc.sg, sg, entry->memdesc.sglen, i) {
 			page = sg_page(sg);
 			for (j = 0; j < (sg->length >> PAGE_SHIFT); j++)
-				set_page_dirty(nth_page(page, j));
+				set_page_dirty_lock(nth_page(page, j));
 		}
 	}
 
@@ -4254,6 +4254,13 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	ret = arch_mmap_check(addr, len, flags);
 	if (ret)
 		goto put;
+
+	/* Do not allow CPU mappings for secure buffers */
+	if (kgsl_memdesc_is_secured(&entry->memdesc)) {
+		ret = -EPERM;
+		goto put;
+	}
+
 	/*
 	 * If we're not going to use CPU map feature, get an ordinary mapping
 	 * with nothing more to be done.
@@ -4704,6 +4711,7 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 		device->id, device->reg_phys, device->reg_len);
 
 	rwlock_init(&device->context_lock);
+	spin_lock_init(&device->submit_lock);
 
 	setup_timer(&device->idle_timer, kgsl_timer, (unsigned long) device);
 	status = kgsl_create_device_workqueue(device);
@@ -4834,7 +4842,7 @@ static void kgsl_core_exit(void)
 static int __init kgsl_core_init(void)
 {
 	int result = 0;
-	struct sched_param param = { .sched_priority = 2 };
+	struct sched_param param = { .sched_priority = 16 };
 
 	/* alloc major and minor device numbers */
 	result = alloc_chrdev_region(&kgsl_driver.major, 0, KGSL_DEVICE_MAX,

@@ -46,8 +46,13 @@
  * (to see the precise effective timeslice length of your workload,
  *  run vmstat and monitor the context-switches (cs) field)
  */
+#ifdef CONFIG_ZEN_INTERACTIVE
+unsigned int sysctl_sched_latency = 3000000ULL;
+unsigned int normalized_sysctl_sched_latency = 3000000ULL;
+#else
 unsigned int sysctl_sched_latency = 6000000ULL;
 unsigned int normalized_sysctl_sched_latency = 6000000ULL;
+#endif
 
 /*
  * The initial- and re-scaling of tunables is configurable
@@ -65,13 +70,22 @@ enum sched_tunable_scaling sysctl_sched_tunable_scaling
  * Minimal preemption granularity for CPU-bound tasks:
  * (default: 0.75 msec * (1 + ilog(ncpus)), units: nanoseconds)
  */
+#ifdef CONFIG_ZEN_INTERACTIVE
+unsigned int sysctl_sched_min_granularity = 300000ULL;
+unsigned int normalized_sysctl_sched_min_granularity = 300000ULL;
+#else
 unsigned int sysctl_sched_min_granularity = 750000ULL;
 unsigned int normalized_sysctl_sched_min_granularity = 750000ULL;
+#endif
 
 /*
  * is kept at sysctl_sched_latency / sysctl_sched_min_granularity
  */
+#ifdef CONFIG_ZEN_INTERACTIVE
+static unsigned int sched_nr_latency = 10;
+#else
 static unsigned int sched_nr_latency = 8;
+#endif
 
 /*
  * After fork, child runs first. If set to 0 (default) then
@@ -95,10 +109,17 @@ unsigned int __read_mostly sysctl_sched_wake_to_idle;
  * and reduces their over-scheduling. Synchronous workloads will still
  * have immediate wakeup/sleep latencies.
  */
+#ifdef CONFIG_ZEN_INTERACTIVE
+unsigned int sysctl_sched_wakeup_granularity = 500000UL;
+unsigned int normalized_sysctl_sched_wakeup_granularity = 500000UL;
+
+const_debug unsigned int sysctl_sched_migration_cost = 250000UL;
+#else
 unsigned int sysctl_sched_wakeup_granularity = 1000000UL;
 unsigned int normalized_sysctl_sched_wakeup_granularity = 1000000UL;
 
 const_debug unsigned int sysctl_sched_migration_cost = 500000UL;
+#endif
 
 /*
  * The exponential sliding  window over which load is averaged for shares
@@ -118,7 +139,11 @@ unsigned int __read_mostly sysctl_sched_shares_window = 10000000UL;
  *
  * default: 5 msec, units: microseconds
   */
+#ifdef CONFIG_ZEN_INTERACTIVE
+unsigned int sysctl_sched_cfs_bandwidth_slice = 3000UL;
+#else
 unsigned int sysctl_sched_cfs_bandwidth_slice = 5000UL;
+#endif
 #endif
 
 /*
@@ -3132,6 +3157,19 @@ static void check_spread(struct cfs_rq *cfs_rq, struct sched_entity *se)
 #endif
 }
 
+static unsigned int Lgentle_fair_sleepers = 0;
+static unsigned int Larch_power = 1;
+
+void relay_gfs(unsigned int gfs)
+{
+	Lgentle_fair_sleepers = gfs;
+}
+
+void relay_ap(unsigned int ap)
+{
+	Larch_power = ap;
+}
+
 static void
 place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 {
@@ -3154,7 +3192,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 		 * Halve their sleep time's effect, to allow
 		 * for a gentler effect of sleepers:
 		 */
-		if (sched_feat(GENTLE_FAIR_SLEEPERS))
+		if (Lgentle_fair_sleepers)
 			thresh >>= 1;
 
 		vruntime -= thresh;
@@ -3171,7 +3209,7 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 {
 	/*
 	 * Update the normalized vruntime before updating min_vruntime
-	 * through callig update_curr().
+	 * through calling update_curr().
 	 */
 	if (!(flags & ENQUEUE_WAKEUP) || (flags & ENQUEUE_WAKING))
 		se->vruntime += cfs_rq->min_vruntime;
@@ -5916,7 +5954,7 @@ static void update_cpu_power(struct sched_domain *sd, int cpu)
 	struct sched_group *sdg = sd->groups;
 
 	if ((sd->flags & SD_SHARE_CPUPOWER) && weight > 1) {
-		if (sched_feat(ARCH_POWER))
+		if (Larch_power)
 			power *= arch_scale_smt_power(sd, cpu);
 		else
 			power *= default_scale_smt_power(sd, cpu);
@@ -5926,7 +5964,7 @@ static void update_cpu_power(struct sched_domain *sd, int cpu)
 
 	sdg->sgp->power_orig = power;
 
-	if (sched_feat(ARCH_POWER))
+	if (Larch_power)
 		power *= arch_scale_freq_power(sd, cpu);
 	else
 		power *= default_scale_freq_power(sd, cpu);
@@ -6988,7 +7026,6 @@ void idle_balance(int this_cpu, struct rq *this_rq)
 			continue;
 
 		if (sd->flags & SD_BALANCE_NEWIDLE) {
-			/* If we've pulled tasks over stop searching: */
 			pulled_task = load_balance(balance_cpu, balance_rq,
 					sd, CPU_NEWLY_IDLE, &balance);
 		}
@@ -6996,7 +7033,11 @@ void idle_balance(int this_cpu, struct rq *this_rq)
 		interval = msecs_to_jiffies(sd->balance_interval);
 		if (time_after(next_balance, sd->last_balance + interval))
 			next_balance = sd->last_balance + interval;
-		if (pulled_task) {
+			/*
+			* Stop searching for tasks to pull if there are
+			* now runnable tasks on this rq.
+			*/
+        if (pulled_task || this_rq->nr_running > 0) {
 			balance_rq->idle_stamp = 0;
 			break;
 		}

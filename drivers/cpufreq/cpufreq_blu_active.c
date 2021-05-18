@@ -52,7 +52,6 @@ struct cpufreq_blu_active_cpuinfo {
 	u64 pol_hispeed_val_time; /* policy hispeed_validate_time */
 	u64 loc_hispeed_val_time; /* per-cpu hispeed_validate_time */
 	struct rw_semaphore enable_sem;
-	unsigned long *cpu_busy_times;
 	int governor_enabled;
 	struct cpufreq_blu_active_tunables *cached_tunables;
 };
@@ -109,7 +108,7 @@ struct cpufreq_blu_active_tunables {
 #define DEFAULT_TIMER_SLACK (4 * DEFAULT_TIMER_RATE)
 	int timer_slack_val;
 	bool io_is_busy;
-	/*
+ 	/*
 	 * Whether to align timer windows across all CPUs. When
 	 * use_sched_load is true, this flag is ignored and windows
 	 * will always be aligned.

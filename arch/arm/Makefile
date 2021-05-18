@@ -51,6 +51,8 @@ endif
 
 comma = ,
 
+# Cortex-A53 optimizations
+arch-$(CONFIG_ARCH_MSM8916)	:= $(call cc-option,-mcpu=cortex-a53+crc+crypto,-march=armv8-a+crc+crypto)
 #
 # The Scalar Replacement of Aggregates (SRA) optimization pass in GCC 4.9 and
 # later may result in code being generated that handles signed short and signed

@@ -51,9 +51,6 @@
 #include <linux/qpnp/qpnp-adc.h>
 
 #include <linux/msm-bus.h>
-#ifdef CONFIG_MACH_OPPO
-#include <soc/oppo/oppo_project.h>
-#endif
 
 #define MSM_USB_BASE	(motg->regs)
 #define MSM_USB_PHY_CSR_BASE (motg->phy_csr_regs)
@@ -88,6 +85,14 @@ enum msm_otg_phy_reg_mode {
 	USB_PHY_REG_LPM_OFF,
 };
 
+#ifdef CONFIG_SMB1360_CHARGER_FG_AQUARIS
+	extern void setAcInstat(void);//wuboadd
+	extern void acquire_AC_charger_wakelock(void);
+	extern void set_android_charging_enable(void);
+	extern void smb1360_set_usb_current_call(int current_limit_enable);
+	extern int first_mic;
+#endif	
+
 static char *override_phy_init;
 module_param(override_phy_init, charp, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(override_phy_init,
@@ -98,11 +103,7 @@ module_param(lpm_disconnect_thresh , uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(lpm_disconnect_thresh,
 	"Delay before entering LPM on USB disconnect");
 
-#ifndef CONFIG_MACH_OPPO
-static bool floated_charger_enable;
-#else
-static bool floated_charger_enable = 1;
-#endif
+static bool floated_charger_enable = true;
 module_param(floated_charger_enable , bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(floated_charger_enable,
 	"Whether to enable floated charger");
@@ -116,17 +117,6 @@ MODULE_PARM_DESC(enable_dbg_log, "Debug buffer events");
 static int hvdcp_max_current = IDEV_HVDCP_CHG_MAX;
 module_param(hvdcp_max_current, int, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(hvdcp_max_current, "max current drawn for HVDCP charger");
-
-#ifdef CONFIG_MACH_OPPO
-enum {
-    VOOC_CHARGER_MODE,
-    HEADPHONE_MODE,
-    NORMAL_CHARGER_MODE,
-};
-atomic_t otg_id_state = ATOMIC_INIT(1);
-atomic_t headset_status = ATOMIC_INIT(0);
-atomic_t oppo_otg_state = ATOMIC_INIT(0);
-#endif
 
 static DECLARE_COMPLETION(pmic_vbus_init);
 static struct msm_otg *the_msm_otg;
@@ -1872,6 +1862,29 @@ static void msm_otg_notify_host_mode(struct msm_otg *motg, bool host_mode)
 	}
 }
 
+int get_msm_otg_chg_type(void)
+{
+	struct msm_otg *motg = the_msm_otg;
+	int charger_type;
+	if (motg->chg_type == USB_SDP_CHARGER ||
+			motg->chg_type == USB_FLOATED_CHARGER)
+		charger_type = POWER_SUPPLY_TYPE_USB;
+	else if (motg->chg_type == USB_CDP_CHARGER)
+		charger_type = POWER_SUPPLY_TYPE_USB_CDP;
+	else if (motg->chg_type == USB_DCP_CHARGER ||
+			motg->chg_type == USB_PROPRIETARY_CHARGER)
+		charger_type = POWER_SUPPLY_TYPE_USB_DCP;
+	else if ((motg->chg_type == USB_ACA_DOCK_CHARGER ||
+		motg->chg_type == USB_ACA_A_CHARGER ||
+		motg->chg_type == USB_ACA_B_CHARGER ||
+		motg->chg_type == USB_ACA_C_CHARGER))
+		charger_type = POWER_SUPPLY_TYPE_USB_ACA;
+	else
+		charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
+	return charger_type;
+}
+EXPORT_SYMBOL(get_msm_otg_chg_type);
+
 static int msm_otg_notify_chg_type(struct msm_otg *motg)
 {
 	static int charger_type;
@@ -1883,13 +1896,13 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 	if (charger_type == motg->chg_type)
 		return 0;
 
-	if (motg->chg_type == USB_SDP_CHARGER)
+	if (motg->chg_type == USB_SDP_CHARGER  ||
+			motg->chg_type == USB_FLOATED_CHARGER)
 		charger_type = POWER_SUPPLY_TYPE_USB;
 	else if (motg->chg_type == USB_CDP_CHARGER)
 		charger_type = POWER_SUPPLY_TYPE_USB_CDP;
 	else if (motg->chg_type == USB_DCP_CHARGER ||
-			motg->chg_type == USB_PROPRIETARY_CHARGER ||
-			motg->chg_type == USB_FLOATED_CHARGER)
+			motg->chg_type == USB_PROPRIETARY_CHARGER)
 		charger_type = POWER_SUPPLY_TYPE_USB_DCP;
 	else if ((motg->chg_type == USB_ACA_DOCK_CHARGER ||
 		motg->chg_type == USB_ACA_A_CHARGER ||
@@ -1903,6 +1916,20 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 		pr_err("No USB power supply registered!\n");
 		return -EINVAL;
 	}
+
+#ifdef CONFIG_SMB1360_CHARGER_FG_AQUARIS
+    if(charger_type == POWER_SUPPLY_TYPE_USB_DCP){
+		set_android_charging_enable();
+		setAcInstat();
+		if (1 == first_mic) {
+			smb1360_set_usb_current_call(1);
+		}
+		acquire_AC_charger_wakelock();
+    }
+	if(charger_type == POWER_SUPPLY_TYPE_USB){
+		set_android_charging_enable();	
+	}
+#endif
 
 	pr_debug("setting usb power supply type %d\n", charger_type);
 	msm_otg_dbg_log_event(&motg->phy, "SET USB PWR SUPPLY TYPE",
@@ -1924,12 +1951,7 @@ static int msm_otg_notify_power_supply(struct msm_otg *motg, unsigned mA)
 			goto psy_error;
 		if (power_supply_set_current_limit(psy, 1000*mA))
 			goto psy_error;
-#ifndef CONFIG_MACH_OPPO
 	} else if (motg->cur_power >= 0 && (mA == 0 || mA == 2)) {
-#else
-	} else if (motg->cur_power >= 0 && (mA == 0 || mA == 2) &&
-			(motg->chg_type == USB_INVALID_CHARGER)) {
-#endif
 		/* Disable charging */
 		if (power_supply_set_online(psy, false))
 			goto psy_error;
@@ -2169,9 +2191,6 @@ static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 	if (on) {
 		msm_otg_notify_host_mode(motg, on);
 		ret = regulator_enable(vbus_otg);
-#ifdef CONFIG_MACH_OPPO
-		msleep(500);
-#endif
 		if (ret) {
 			pr_err("unable to enable vbus_otg\n");
 			return;
@@ -2179,13 +2198,6 @@ static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 		vbus_is_on = true;
 	} else {
 		ret = regulator_disable(vbus_otg);
-#ifdef CONFIG_MACH_OPPO
-		if (ret) {
-			msleep(10);
-			ret = regulator_disable(vbus_otg);
-			msleep(5);
-		}
-#endif
 		if (ret) {
 			pr_err("unable to disable vbus_otg\n");
 			return;
@@ -3138,15 +3150,6 @@ static void msm_otg_init_sm(struct msm_otg *motg)
 			else
 				clear_bit(B_SESS_VLD, &motg->inputs);
 		} else if (pdata->otg_control == OTG_PMIC_CONTROL) {
-#ifdef CONFIG_MACH_OPPO
-			if (is_project(OPPO_14005) &&
-					get_Operator_Version() >= 5) {
-				if (atomic_read(&otg_id_state))
-					set_bit(ID, &motg->inputs);
-				else
-					clear_bit(ID, &motg->inputs);
-			} else
-#endif
 			if (pdata->pmic_id_irq) {
 				if (msm_otg_read_pmic_id_state(motg))
 					set_bit(ID, &motg->inputs);
@@ -3265,9 +3268,6 @@ static void msm_otg_sm_work(struct work_struct *w)
 	struct msm_otg *motg = container_of(w, struct msm_otg, sm_work);
 	struct usb_otg *otg = motg->phy.otg;
 	bool work = 0, srp_reqd, dcp;
-#ifdef CONFIG_MACH_OPPO
-	static int oppo_otg_check_count = 0;
-#endif
 
 	pm_runtime_resume(otg->phy->dev);
 	if (motg->pm_done) {
@@ -3334,15 +3334,6 @@ static void msm_otg_sm_work(struct work_struct *w)
 				case USB_DCP_CHARGER:
 					/* fall through */
 				case USB_PROPRIETARY_CHARGER:
-#ifdef CONFIG_MACH_OPPO
-					if (is_project(OPPO_14005) ||
-					    is_project(OPPO_15018) ||
-					    is_project(OPPO_15011) ||
-					    is_project(OPPO_15022))
-						msm_otg_notify_charger(motg,
-								2000);
-					else
-#endif
 					msm_otg_notify_charger(motg,
 							IDEV_CHG_MAX);
 					otg->phy->state =
@@ -3355,18 +3346,6 @@ static void msm_otg_sm_work(struct work_struct *w)
 					pm_runtime_put_sync(otg->phy->dev);
 					break;
 				case USB_FLOATED_CHARGER:
-#ifdef CONFIG_MACH_OPPO
-					if (is_project(OPPO_14005) ||
-					    is_project(OPPO_15018) ||
-					    is_project(OPPO_15011) ||
-					    is_project(OPPO_15022))
-						msm_otg_notify_charger(motg,
-								2000);
-					else if (is_project(OPPO_15109))
-						msm_otg_notify_charger(motg,
-								IDEV_CHG_MIN);
-					else
-#endif
 					msm_otg_notify_charger(motg,
 							IDEV_CHG_MAX);
 					otg->phy->state =
@@ -3794,20 +3773,8 @@ static void msm_otg_sm_work(struct work_struct *w)
 			 */
 			if (test_bit(ID_A, &motg->inputs))
 				msm_otg_notify_charger(motg, IDEV_CHG_MIN);
-			else {
+			else
 				msm_hsusb_vbus_power(motg, 0);
-#ifdef CONFIG_MACH_OPPO
-				if (is_project(OPPO_14005) &&
-						get_Operator_Version() >= 5) {
-					pr_debug("%s: set oppo_otg_state to 0\n",
-							__func__);
-					atomic_set(&oppo_otg_state,0);
-					oppo_otg_check_count = 0;
-					if (atomic_read(&headset_status) == 1)
-						oppo_headset_detect_plug(1);
-				}
-#endif
-			}
 			otg->phy->state = OTG_STATE_A_WAIT_VFALL;
 			msm_otg_start_timer(motg, TA_WAIT_VFALL, A_WAIT_VFALL);
 		} else if (!test_bit(A_VBUS_VLD, &motg->inputs)) {
@@ -3826,33 +3793,6 @@ static void msm_otg_sm_work(struct work_struct *w)
 			 * If TA_WAIT_BCON is infinite, we don;t
 			 * turn off VBUS. Enter low power mode.
 			 */
-#ifdef CONFIG_MACH_OPPO
-			if (is_project(OPPO_14005) && get_Operator_Version() >= 5) {
-				pr_debug("%s: oppo_otg_state=%d oppo_otg_check_count=%d\n",
-						__func__,
-						atomic_read(&oppo_otg_state),
-						oppo_otg_check_count);
-				if (atomic_read(&oppo_otg_state) == 0 &&
-						!test_bit(ID, &motg->inputs)) {
-					oppo_otg_check_count++;
-					if (oppo_otg_check_count >= 30) {
-						pr_err("%s: oppo_otg_check_count >= 30\n",
-								__func__);
-						set_bit(ID, &motg->inputs);
-						atomic_set(&otg_id_state, 1);
-						atomic_set(&headset_status, 1);
-						oppo_otg_check_count = 0;
-					}
-					work = 1;
-				} else if (TA_WAIT_BCON < 0) {
-					msm_otg_dbg_log_event(&motg->phy,
-						"PM RUNTIME: AWBCONN PUT",
-						get_pm_runtime_counter(otg->phy->dev),
-						0);
-					pm_runtime_put_sync(otg->phy->dev);
-				}
-			} else
-#endif
 			if (TA_WAIT_BCON < 0) {
 				msm_otg_dbg_log_event(&motg->phy,
 					"PM RUNTIME: AWBCONN PUT",
@@ -3913,14 +3853,6 @@ static void msm_otg_sm_work(struct work_struct *w)
 			pr_debug("!b_conn\n");
 			msm_otg_dbg_log_event(&motg->phy, "!B_CONN",
 					motg->inputs, otg->phy->state);
-#ifdef CONFIG_MACH_OPPO
-			if (is_project(OPPO_14005) &&
-					get_Operator_Version() >= 5) {
-				atomic_set(&oppo_otg_state, 1);
-				pr_debug("%s: set oppo_otg_state to 1\n",
-						__func__);
-			}
-#endif
 			msm_otg_del_timer(motg);
 			otg->phy->state = OTG_STATE_A_WAIT_BCON;
 			if (TA_WAIT_BCON > 0)
@@ -4273,6 +4205,11 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 	return ret;
 }
 
+#ifdef CONFIG_TOUCHSCREEN_FT5X06
+extern struct work_struct usbdetect_on;
+extern struct work_struct usbdetect_off;
+#endif
+
 static void msm_otg_set_vbus_state(int online)
 {
 	struct msm_otg *motg = the_msm_otg;
@@ -4282,12 +4219,18 @@ static void msm_otg_set_vbus_state(int online)
 		pr_debug("PMIC: BSV set\n");
 		msm_otg_dbg_log_event(&motg->phy, "PMIC: BSV SET",
 				init, motg->inputs);
+#ifdef CONFIG_TOUCHSCREEN_FT5X06
+		schedule_work(&usbdetect_on);
+#endif
 		if (test_and_set_bit(B_SESS_VLD, &motg->inputs) && init)
 			return;
 	} else {
 		pr_debug("PMIC: BSV clear\n");
 		msm_otg_dbg_log_event(&motg->phy, "PMIC: BSV CLEAR",
 				init, motg->inputs);
+#ifdef CONFIG_TOUCHSCREEN_FT5X06
+		schedule_work(&usbdetect_off);
+#endif
 		if (!test_and_clear_bit(B_SESS_VLD, &motg->inputs) && init)
 			return;
 	}
@@ -4387,37 +4330,6 @@ static void msm_id_status_w(struct work_struct *w)
 	}
 
 }
-
-#ifdef CONFIG_MACH_OPPO
-void oppo_otg_id_status(int id_state)
-{
-	struct msm_otg *motg = the_msm_otg;
-	int work = 0;
-
-	if (id_state) {
-		if (!test_and_set_bit(ID, &motg->inputs)) {
-			pr_debug("%s: ID set\n", __func__);
-			atomic_set(&oppo_otg_state, 0);
-			work = 1;
-		}
-	} else {
-		if (test_and_clear_bit(ID, &motg->inputs)) {
-			pr_debug("%s: ID clear\n", __func__);
-			set_bit(A_BUS_REQ, &motg->inputs);
-			work = 1;
-		}
-	}
-
-	if (work && (motg->phy.state != OTG_STATE_UNDEFINED)) {
-		if (atomic_read(&motg->pm_suspended)) {
-			motg->sm_work_pending = true;
-		} else if (!motg->sm_work_pending) {
-			/* process event only if previous one is not pending */
-			queue_work(the_msm_otg->otg_wq, &motg->sm_work);
-		}
-	}
-}
-#endif
 
 #define MSM_ID_STATUS_DELAY	5 /* 5msec */
 static irqreturn_t msm_id_irq(int irq, void *data)
@@ -4837,7 +4749,6 @@ static int otg_power_set_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_TYPE:
 		psy->type = val->intval;
 
-#ifndef CONFIG_MACH_OPPO
 		/*
 		 * If charger detection is done by the USB driver,
 		 * motg->chg_type is already assigned in the
@@ -4881,7 +4792,6 @@ static int otg_power_set_property_usb(struct power_supply *psy,
 			chg_to_string(motg->chg_type));
 		msm_otg_dbg_log_event(&motg->phy, "SET CHARGER TYPE ",
 				motg->chg_type, psy->type);
-#endif
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		motg->usbin_health = val->intval;
@@ -5407,39 +5317,6 @@ static ssize_t dpdm_pulldown_enable_store(struct device *dev,
 static DEVICE_ATTR(dpdm_pulldown_enable, S_IRUGO | S_IWUSR,
 		dpdm_pulldown_enable_show, dpdm_pulldown_enable_store);
 
-#ifdef CONFIG_MACH_OPPO
-static ssize_t show_OTG_status(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	pr_debug("%s: otg_flag=%x\n", __func__, !(atomic_read(&otg_id_state)));
-	return sprintf(buf, "%u\n", !(atomic_read(&otg_id_state)));
-}
-
-static ssize_t store_OTG_status(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	char *pvalue = NULL;
-	struct msm_otg *motg = the_msm_otg;
-
-	if (buf != NULL && size != 0) {
-		int otg_id_target = !simple_strtoul(buf, &pvalue, 16);
-		pr_debug("%s: otg_id_target=0x%x\n", __func__, otg_id_target);
-		mutex_lock(&motg->otg_mutex_lock);
-		if (atomic_read(&otg_id_state) != otg_id_target) {
-			atomic_set(&otg_id_state, otg_id_target);
-			atomic_set(&headset_status, otg_id_target);
-			atomic_set(&oppo_otg_state, !otg_id_target);
-			oppo_headset_detect_plug(otg_id_target);
-			oppo_otg_id_status(atomic_read(&otg_id_state));
-		}
-		mutex_unlock(&motg->otg_mutex_lock);
-	}
-
-	return size;
-}
-static DEVICE_ATTR(OTG_status, 0666, show_OTG_status, store_OTG_status);
-#endif
-
 struct msm_otg_platform_data *msm_otg_dt_to_pdata(struct platform_device *pdev)
 {
 	struct device_node *node = pdev->dev.of_node;
@@ -5510,6 +5387,10 @@ struct msm_otg_platform_data *msm_otg_dt_to_pdata(struct platform_device *pdev)
 			of_get_named_gpio(node, "qcom,usbid-gpio", 0);
 	if (pdata->usb_id_gpio < 0)
 		pr_debug("usb_id_gpio is not available\n");
+
+	pdata->usbid_switch_gpio = of_get_named_gpio(node, "qcom,usbid-switch", 0);
+		if (pdata->usbid_switch_gpio < 0)
+			pr_debug("usbid_switch_gpio is not available\n");
 
 	pdata->l1_supported = of_property_read_bool(node,
 				"qcom,hsusb-l1-supported");
@@ -6016,11 +5897,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 		goto free_async_irq;
 	}
 
-	if (
-#ifdef CONFIG_MACH_OPPO
-		(!is_project(OPPO_14005) || get_Operator_Version() < 5) &&
-#endif
-		motg->pdata->mode == USB_OTG &&
+	if (motg->pdata->mode == USB_OTG &&
 		motg->pdata->otg_control == OTG_PMIC_CONTROL &&
 		!motg->phy_irq) {
 
@@ -6094,6 +5971,18 @@ static int msm_otg_probe(struct platform_device *pdev)
 		}
 	}
 
+	if (gpio_is_valid(motg->pdata->usbid_switch_gpio)) {
+		ret = gpio_request(motg->pdata->usbid_switch_gpio,
+						"USBID_SIWTCH_GPIO");
+		if (ret == 0) {
+			gpio_direction_output(pdata->usbid_switch_gpio, 1);
+			gpio_set_value(pdata->usbid_switch_gpio, 1);
+		} else {
+			dev_err(&pdev->dev, "gpio req failed for USBID_SIWTCH_GPIO\n");
+			motg->pdata->usbid_switch_gpio = 0;
+		}
+	}
+
 	msm_hsusb_mhl_switch_enable(motg, 1);
 
 	platform_set_drvdata(pdev, motg);
@@ -6105,13 +5994,6 @@ static int msm_otg_probe(struct platform_device *pdev)
 		dev_dbg(&pdev->dev, "mode debugfs file is"
 			"not available\n");
 
-#ifdef CONFIG_MACH_OPPO
-	if (is_project(OPPO_14005) && get_Operator_Version() >= 5
-		&& motg->pdata->otg_control == OTG_PMIC_CONTROL
-		&& motg->pdata->mode == USB_OTG) {
-		motg->caps = ALLOW_PHY_POWER_COLLAPSE | ALLOW_PHY_RETENTION;
-	} else
-#endif
 	if (motg->pdata->otg_control == OTG_PMIC_CONTROL &&
 			(!(motg->pdata->mode == USB_OTG) ||
 			 motg->pdata->pmic_id_irq || motg->ext_id_irq))
@@ -6190,13 +6072,6 @@ static int msm_otg_probe(struct platform_device *pdev)
 	motg->pm_notify.notifier_call = msm_otg_pm_notify;
 	register_pm_notifier(&motg->pm_notify);
 	msm_otg_dbg_log_event(phy, "OTG PROBE", motg->caps, motg->lpm_flags);
-
-#ifdef CONFIG_MACH_OPPO
-	if (is_project(OPPO_14005) && get_Operator_Version() >= 5) {
-		device_create_file(&pdev->dev, &dev_attr_OTG_status);
-		mutex_init(&(motg->otg_mutex_lock));
-	}
-#endif
 
 	return 0;
 
